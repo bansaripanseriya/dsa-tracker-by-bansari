@@ -7,22 +7,7 @@ import Tracker from './pages/Tracker';
 
 function TrackerWithUserKey() {
   const { user } = useAuth();
-  return <Tracker key={user?.id || 'user'} />;
-}
-
-function ProtectedRoute({ children }) {
-  const { token, loading } = useAuth();
-  if (loading) {
-    return (
-      <div className="auth-page">
-        <p className="auth-sub">Loading…</p>
-      </div>
-    );
-  }
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
-  return children;
+  return <Tracker key={user?.id || 'guest'} />;
 }
 
 function PublicOnly({ children }) {
@@ -59,14 +44,7 @@ function AppRoutes() {
           </PublicOnly>
         }
       />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <TrackerWithUserKey />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/" element={<TrackerWithUserKey />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

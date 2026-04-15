@@ -82,13 +82,11 @@ export default function PracticeTab({ practiceDone, togglePrac, openDays, toggle
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            flexShrink: 0,
-                            background: isDone ? 'var(--accent)' : 'transparent',
-                            borderColor: isDone ? 'var(--accent)' : undefined
+                            flexShrink: 0
                           }}
                         >
-                          <svg width="9" height="9" viewBox="0 0 10 10" fill="none" style={{ display: isDone ? 'block' : 'none' }}>
-                            <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ display: isDone ? 'block' : 'none' }}>
+                            <path d="M2 6l3 3L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
                         </button>
                         <div

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
+import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { mergeGuestProgressAfterAuth } from '../utils/guestProgress';
 
 export default function Register() {
-  const { register } = useAuth();
+  const { register, setProgress } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,6 +24,7 @@ export default function Register() {
     setPending(true);
     try {
       await register(email, password, name.trim() || undefined);
+      await mergeGuestProgressAfterAuth(api, setProgress);
       navigate('/', { replace: true });
     } catch (err) {
       const msg = err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Registration failed';

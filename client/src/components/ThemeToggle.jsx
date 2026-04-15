@@ -28,14 +28,14 @@ function IconMoon() {
   );
 }
 
-export default function ThemeToggle({ className = '' }) {
+export default function ThemeToggle({ className = '', compact = false }) {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
 
   return (
     <button
       type="button"
-      className={`theme-toggle${className ? ` ${className}` : ''}`}
+      className={`theme-toggle${compact ? ' theme-toggle--compact' : ''}${className ? ` ${className}` : ''}`}
       onClick={toggleTheme}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       title={isDark ? 'Light mode' : 'Dark mode'}

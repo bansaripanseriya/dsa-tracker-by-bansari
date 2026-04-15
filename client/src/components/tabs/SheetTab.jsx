@@ -108,11 +108,11 @@ export default function SheetTab({ sheetDone, toggleSheet, openSections, toggleS
                         onClick={() => toggleSheet(s.id, p._i)}
                         aria-label={isDone ? 'Mark not done' : 'Mark done'}
                       >
-                        <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
                           <path
-                            d="M2 5l2.5 2.5L8 3"
-                            stroke="white"
-                            strokeWidth="1.6"
+                            d="M2 6l3 3L10 3"
+                            stroke="currentColor"
+                            strokeWidth="2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
                           />

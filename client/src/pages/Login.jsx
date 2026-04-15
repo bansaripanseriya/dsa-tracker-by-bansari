@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
+import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { mergeGuestProgressAfterAuth } from '../utils/guestProgress';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, setProgress } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,6 +19,7 @@ export default function Login() {
     setPending(true);
     try {
       await login(email, password);
+      await mergeGuestProgressAfterAuth(api, setProgress);
       navigate('/', { replace: true });
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
