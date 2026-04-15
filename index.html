@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DSA Complete Sheet — All LeetCode Problems by Topic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<header class="hdr">
+  <a class="logo" href="#">
+    <div class="logo-box">DSA</div>
+    <span class="logo-name">Complete Sheet</span>
+  </a>
+  <div class="hdr-gap"></div>
+  <span class="hdr-note" id="totalNote">Loading…</span>
+</header>
+
+<div class="tab-nav" id="tabNav">
+  <button type="button" class="tab-btn active" onclick="switchTab('sheet',this)">Sheet</button>
+  <button type="button" class="tab-btn practice-tab" onclick="switchTab('practice',this)">Practice</button>
+  <button type="button" class="tab-btn streak-tab" onclick="switchTab('streak',this)">🔥 Streak</button>
+</div>
+
+<!-- Sheet tab -->
+<div class="tab-pane visible" id="tab-sheet">
+  <section class="hero">
+    <h1>All LeetCode problems, <span>topic by topic</span></h1>
+    <p>Every important free problem categorized across 25 topics. Click Practice to open directly on LeetCode.</p>
+  </section>
+
+  <div class="stats" id="statsEl"></div>
+  <div class="prog">
+    <div class="prog-row"><span id="pTxt">0 / 0 solved</span><span id="pPct">0%</span></div>
+    <div class="prog-track"><div class="prog-fill" id="pFill" style="width:0%"></div></div>
+    <div class="diff-row">
+      <div class="dr"><div class="dr-track"><div class="dr-fill" id="eBar" style="background:var(--easy);width:0%"></div></div><span id="eTxt" style="color:var(--easy)">Easy 0/0</span></div>
+      <div class="dr"><div class="dr-track"><div class="dr-fill" id="mBar" style="background:var(--med);width:0%"></div></div><span id="mTxt" style="color:var(--med)">Medium 0/0</span></div>
+      <div class="dr"><div class="dr-track"><div class="dr-fill" id="hBar" style="background:var(--hard);width:0%"></div></div><span id="hTxt" style="color:var(--hard)">Hard 0/0</span></div>
+    </div>
+  </div>
+
+  <div class="ctrl">
+    <div class="sw">
+      <svg class="si" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="search" id="srch" placeholder="Search any problem…" oninput="render()" autocomplete="off">
+    </div>
+    <button type="button" class="pill on" onclick="sf('all',this,'on')">All</button>
+    <button type="button" class="pill" onclick="sf('Easy',this,'eon')">Easy</button>
+    <button type="button" class="pill" onclick="sf('Medium',this,'mon')">Medium</button>
+    <button type="button" class="pill" onclick="sf('Hard',this,'hon')">Hard</button>
+    <button type="button" class="pill" onclick="sf('done',this,'on')">✓ Done</button>
+    <button type="button" class="pill" onclick="sf('todo',this,'on')">To Do</button>
+  </div>
+
+  <div class="secs" id="secsEl"></div>
+</div>
+
+<!-- Practice tab -->
+<div class="tab-pane" id="tab-practice">
+  <div class="prac-wrap">
+    <div class="prac-hero">
+      <h2>Daily <span>Practice Plan</span></h2>
+      <p>5 problems per day, curated by topic and difficulty. Complete each day to build consistent habits.</p>
+    </div>
+    <div class="prac-prog-wrap">
+      <div class="prac-prog-top"><span id="pracProgTxt">0 / 0 problems solved</span><span id="pracProgPct">0%</span></div>
+      <div class="prac-track"><div class="prac-fill" id="pracFill" style="width:0%"></div></div>
+    </div>
+    <div class="day-grid" id="dayGrid"></div>
+  </div>
+</div>
+
+<!-- Streak tab -->
+<div class="tab-pane" id="tab-streak">
+  <div class="streak-wrap">
+    <div class="streak-hero">
+      <div class="streak-fire">🔥</div>
+      <div class="streak-count" id="streakCount">0</div>
+      <div class="streak-label">day streak</div>
+      <div class="streak-best" id="streakBest">Best: 0 days</div>
+      <div class="streak-actions">
+        <button type="button" class="btn-checkin" id="checkinBtn" onclick="doCheckin()">Check in today</button>
+      </div>
+    </div>
+
+    <div class="streak-stats-grid">
+      <div class="sstat"><div class="sstat-val" id="sTotal">0</div><div class="sstat-lbl">Total days</div></div>
+      <div class="sstat"><div class="sstat-val" id="sBest">0</div><div class="sstat-lbl">Best streak</div></div>
+      <div class="sstat"><div class="sstat-val" id="sThisMonth">0</div><div class="sstat-lbl">This month</div></div>
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
+      <div class="streak-calendar-head">
+        <span id="calMonthLabel">April 2026</span>
+        <span id="calNote">Mark days you practiced</span>
+      </div>
+      <div class="cal-weekdays">
+        <div class="cal-wd">Sun</div><div class="cal-wd">Mon</div><div class="cal-wd">Tue</div>
+        <div class="cal-wd">Wed</div><div class="cal-wd">Thu</div><div class="cal-wd">Fri</div><div class="cal-wd">Sat</div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+    </div>
+
+    <div class="streak-log" id="streakLog">
+      <div class="streak-log-title">Check-in history</div>
+      <div id="logList"><div style="color:var(--text3);font-size:12px;text-align:center;padding:12px">No check-ins yet. Start your streak today!</div></div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  Problems sourced from <a href="https://leetcode.com/problemset/" target="_blank" rel="noopener">LeetCode</a> · Progress saved locally in your browser
+</footer>
+
+<script src="js/utils/constants.js"></script>
+<script src="js/utils/storage.js"></script>
+<script src="js/utils/leetcode.js"></script>
+<script src="js/utils/date.js"></script>
+<script src="js/data/problems.js"></script>
+<script src="js/data/practice-plan.js"></script>
+<script src="js/modules/sheet.js"></script>
+<script src="js/modules/tabs.js"></script>
+<script src="js/modules/practice.js"></script>
+<script src="js/modules/streak.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

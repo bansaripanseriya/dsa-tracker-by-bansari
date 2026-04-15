@@ -196,3 +196,4 @@ id_rsa
 
 .idea
 docker/data
+node_modules
