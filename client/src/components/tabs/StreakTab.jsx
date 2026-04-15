@@ -258,6 +258,22 @@ function CalendarCard({ checkins }) {
 export default function StreakTab({ streak, doCheckin, authenticated = true, sheetDone = [], displayName = '' }) {
   const checkins = streak.checkins || [];
   const s = calcStreak(checkins);
+  const submissionHistory = useMemo(
+    () =>
+      [...checkins]
+        .sort((a, b) => (a < b ? 1 : -1))
+        .map((dateStr, index) => ({
+          id: `${dateStr}-${index}`,
+          dateStr,
+          label: new Date(`${dateStr}T12:00:00`).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            weekday: 'short'
+          })
+        })),
+    [checkins]
+  );
   const today = dsaTodayStr();
   const alreadyIn = checkins.includes(today);
   const stats = useMemo(() => computeSheetStats(sheetDone), [sheetDone]);
@@ -681,6 +697,22 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="streak-log">
+        <h3 className="streak-log-title">All Submission History</h3>
+        {submissionHistory.length ? (
+          <div className="log-list-inner">
+            {submissionHistory.map((entry, idx) => (
+              <div key={entry.id} className="log-row">
+                <span className="log-date">{entry.label}</span>
+                <span className="log-badge">{idx === 0 && entry.dateStr === today ? 'Today' : 'Submitted'}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="log-empty">No submissions yet. Start by checking in today.</div>
+        )}
       </div>
 
       {notesOpen ? (

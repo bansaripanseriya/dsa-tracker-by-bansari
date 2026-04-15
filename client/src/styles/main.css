@@ -71,6 +71,7 @@ html[data-theme="light"] .hdr-nav-btn:hover{background:rgba(15,23,42,0.05)}
 .hdr-avatar-ring .fg{stroke:#22c55e;stroke-linecap:round;transition:stroke-dasharray .4s ease}
 .hdr-icon-row .hdr-icon-btn:first-child{color:#eab308}
 .hdr-avatar-inner{position:absolute;inset:3px;border-radius:50%;background:linear-gradient(145deg,var(--surface3),var(--surface));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--text);font-family:'Outfit',sans-serif;border:1px solid var(--border)}
+.hdr-avatar-inner img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
 .hdr-profile{position:relative}
 .hdr-profile>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:4px}
 .hdr-profile>summary::-webkit-details-marker{display:none}

@@ -1,51 +1,104 @@
-# DSA Tracker (React + Express + MongoDB)
+# DSA Tracker
 
-Full-stack LeetCode DSA sheet with **register/login**, progress synced to **MongoDB Atlas**, and the same Sheet / Practice / Streak features as the static HTML version.
+Simple full-stack DSA progress tracker built with:
 
-## Prerequisites
+- Frontend: React + Vite
+- Backend: Express + MongoDB
+- Auth: JWT
+
+This project helps a learner track:
+
+- Sheet problems completed
+- Practice problems completed
+- Daily streak/check-ins
+- Section expand/collapse state
+
+---
+
+## 1) Project Purpose
+
+This app is for students preparing DSA (LeetCode-style) topics.
+
+It provides:
+
+- User register/login
+- Personal progress saved in MongoDB
+- Tracker tabs (Sheet, Practice, Streak)
+- Theme support and profile page
+
+---
+
+## 2) Tech Stack
+
+- `client/`: React app (UI)
+- `server/`: Express API (business logic + database access)
+- MongoDB Atlas: stores users and progress
+
+---
+
+## 3) Folder Structure (Important Files)
+
+```text
+dsa-tracker-by-bansari/
+  client/
+    src/
+      api/client.js
+      context/AuthContext.jsx
+      context/ThemeContext.jsx
+      pages/Tracker.jsx
+      pages/Login.jsx
+      pages/Register.jsx
+      pages/Profile.jsx
+      components/
+      data/
+      utils/
+  server/
+    src/
+      index.js
+      config/db.js
+      models/User.js
+      middleware/auth.js
+      routes/auth.js
+      routes/progress.js
+  package.json
+  README.md
+```
+
+---
+
+## 4) Prerequisites
+
+Install:
 
 - Node.js 20+
-- A [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) cluster and connection string
+- npm
+- MongoDB Atlas connection string
 
-## Setup
+---
 
-### 1. Environment (repository root)
+## 5) Environment Variables
 
-Create **`.env` in the project root** (same directory as the root `package.json`), not inside `server/`. Copy from the template:
+Create a `.env` file in the **project root** (same level as root `package.json`):
 
-```bash
-cp .env
+```env
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_long_random_secret
+CLIENT_URL=http://localhost:5173
+PORT=4000
 ```
 
-Edit `.env`:
+Notes:
 
-- `MONGODB_URI` — Atlas connection string (Database → Connect → Drivers). Use a database name in the path, e.g. `...mongodb.net/dsa-tracker?retryWrites=true&w=majority`
-- `JWT_SECRET` — long random string (e.g. `openssl rand -hex 32`)
-- `CLIENT_URL` — `http://localhost:5173` for local dev (comma-separated for multiple origins)
+- `MONGODB_URI` must include a database name.
+- `JWT_SECRET` should be long and random.
+- `CLIENT_URL` can be comma-separated for multiple allowed origins.
+- `PORT` is optional (default is `4000`).
 
-The Express app loads this file via `dotenv` from `server/src/index.js` (resolved path: repo root `.env`).
+---
 
-### 2. Server (`server/`)
+## 6) Installation & Run
 
-```bash
-cd server
-npm install
-npm run dev
-```
-
-API: `http://localhost:4000` (health: `GET /api/health`)
-
-### 3. Client (`client/`)
-
-```bash
-cd client
-npm install
-npm run dev
-```
-
-App: `http://localhost:5173` — Vite proxies `/api` to the Express server.
-
-### 4. Run both (from repo root)
+### Option A: Run both client + server from root (recommended)
 
 ```bash
 npm install
@@ -53,23 +106,144 @@ npm run install:all
 npm run dev
 ```
 
-## Production
+Runs:
 
-1. Build the client: `npm run build --prefix client`
-2. Set `NODE_ENV=production` and run the server; it serves `client/dist` and the SPA for non-API routes.
+- API: `http://localhost:4000`
+- Frontend: `http://localhost:5173`
 
-## API overview
+### Option B: Run separately
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/auth/register` | Body: `{ email, password, name? }` |
-| POST | `/api/auth/login` | Body: `{ email, password }` |
-| GET | `/api/auth/me` | Bearer JWT — user + progress |
-| GET | `/api/progress` | Bearer JWT |
-| PUT | `/api/progress` | Bearer JWT — `{ sheetDone, practiceDone, streak, openSections }` |
+Server:
 
-Progress keys match the old localStorage shape (`dsa_full_v1` style ids as strings).
+```bash
+cd server
+npm install
+npm run dev
+```
 
-## Legacy static site
+Client:
 
-The original single-file and modular static versions remain (`dsa-complete-sheetv02.html`, `index.html` + `js/`).
+```bash
+cd client
+npm install
+npm run dev
+```
+
+---
+
+## 7) Available Scripts
+
+At root:
+
+- `npm run install:all` -> installs dependencies in `server` and `client`
+- `npm run dev` -> starts both server and client together
+- `npm run dev:server` -> starts only backend
+- `npm run dev:client` -> starts only frontend
+- `npm run build` -> builds frontend app
+
+In `server/`:
+
+- `npm run dev` -> run API in watch mode
+- `npm start` -> run API normally
+
+In `client/`:
+
+- `npm run dev` -> run Vite dev server
+- `npm run build` -> create production build
+- `npm run preview` -> preview built app
+
+---
+
+## 8) Authentication Flow (Beginner Friendly)
+
+1. User registers or logs in.
+2. Server validates credentials and returns JWT token.
+3. Token is saved in browser `localStorage`.
+4. Client sends token in API calls.
+5. Protected routes verify token using backend middleware.
+
+Main auth files:
+
+- `client/src/context/AuthContext.jsx`
+- `server/src/routes/auth.js`
+- `server/src/middleware/auth.js`
+
+---
+
+## 9) API Endpoints
+
+Base URL: `http://localhost:4000/api`
+
+| Method | Endpoint | Use |
+|---|---|---|
+| `GET` | `/health` | API health check |
+| `POST` | `/auth/register` | Register user |
+| `POST` | `/auth/login` | Login user |
+| `GET` | `/auth/me` | Get logged-in user + progress |
+| `GET` | `/progress` | Get progress |
+| `PUT` | `/progress` | Update progress |
+
+`PUT /progress` accepted fields:
+
+```json
+{
+  "sheetDone": ["id1", "id2"],
+  "practiceDone": ["id3"],
+  "streak": { "checkins": ["2026-04-15"] },
+  "openSections": [0, 1, 2]
+}
+```
+
+---
+
+## 10) Data Model (High Level)
+
+User document stores:
+
+- `email`
+- `passwordHash`
+- `name`
+- `progress` object:
+  - `sheetDone` (string array)
+  - `practiceDone` (string array)
+  - `streak.checkins` (date string array)
+  - `openSections` (number array)
+
+---
+
+## 11) Production Build
+
+1. Build client:
+
+   ```bash
+   npm run build --prefix client
+   ```
+
+2. Start server with production environment.
+
+When `NODE_ENV=production`, server serves `client/dist` and handles SPA routes.
+
+---
+
+## 12) Troubleshooting
+
+- **Frontend not connecting to backend**
+  - Ensure backend is running on `4000`.
+  - Check `CLIENT_URL` in root `.env`.
+- **MongoDB connection failed**
+  - Recheck `MONGODB_URI`.
+  - Confirm IP allow list and DB user in Atlas.
+- **Auth keeps failing**
+  - Ensure `JWT_SECRET` is set.
+  - Clear browser localStorage token and login again.
+
+---
+
+## 13) Legacy Files
+
+This repo also contains old static versions:
+
+- `dsa-complete-sheetv02.html`
+- `index.html` + `js/`
+
+The active full-stack app is the `client/` + `server/` setup.

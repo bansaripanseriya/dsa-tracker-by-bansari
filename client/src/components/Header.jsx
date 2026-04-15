@@ -54,6 +54,20 @@ function IconSettings() {
   );
 }
 
+function IconUser() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M20 21a8 8 0 0 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function IconLogout() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -70,8 +84,27 @@ function IconLogout() {
 
 const RING_R = 14;
 const RING_LEN = 2 * Math.PI * RING_R;
+const AVATAR_IMAGES = Object.entries(
+  import.meta.glob('../assets/avatars/*.{png,jpg,jpeg,webp,svg}', { eager: true, import: 'default' })
+)
+  .sort(([a], [b]) => a.localeCompare(b))
+  .map(([, src]) => src);
 
-export default function Header({ note, activeTab, onTabChange, streak }) {
+export default function Header({ note, activeTab, onTabChange, streak, showNav = false }) {
+  const showMainNav = typeof onTabChange === 'function' || showNav;
+  const [selectedAvatarIndex, setSelectedAvatarIndex] = useState(() => {
+    const saved = Number(localStorage.getItem('profileAvatarIndex'));
+    return Number.isInteger(saved) && saved >= 0 ? saved : 0;
+  });
+
+  function handleTabNavigation(nextTab) {
+    if (typeof onTabChange === 'function') {
+      onTabChange(nextTab);
+      return;
+    }
+    navigate(`/?tab=${nextTab}`);
+  }
+
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [streakOpen, setStreakOpen] = useState(false);
@@ -109,6 +142,23 @@ export default function Header({ note, activeTab, onTabChange, streak }) {
 
   const weekFrac = Math.min(1, weekCount / 7);
   const streakFrac = streakStats.best > 0 ? Math.min(1, streakStats.current / streakStats.best) : 0;
+  const selectedAvatarSrc = AVATAR_IMAGES[selectedAvatarIndex] || '';
+
+  useEffect(() => {
+    function readAvatarSelection() {
+      const saved = Number(localStorage.getItem('profileAvatarIndex'));
+      if (!Number.isInteger(saved)) return;
+      const safeIndex = Math.max(0, Math.min(saved, Math.max(0, AVATAR_IMAGES.length - 1)));
+      setSelectedAvatarIndex(safeIndex);
+    }
+
+    window.addEventListener('profile-avatar-updated', readAvatarSelection);
+    window.addEventListener('storage', readAvatarSelection);
+    return () => {
+      window.removeEventListener('profile-avatar-updated', readAvatarSelection);
+      window.removeEventListener('storage', readAvatarSelection);
+    };
+  }, []);
 
   useEffect(() => {
     function onDocClick(e) {
@@ -142,6 +192,12 @@ export default function Header({ note, activeTab, onTabChange, streak }) {
 
   function handleSettings() {
     closeProfileMenu();
+    navigate('/profile?tab=security-media');
+  }
+
+  function handleProfile() {
+    closeProfileMenu();
+    navigate('/profile');
   }
 
   function handleLogout() {
@@ -160,17 +216,17 @@ export default function Header({ note, activeTab, onTabChange, streak }) {
         </span>
       </Link>
 
-      {typeof onTabChange === 'function' && (
+      {showMainNav && (
         <nav className="hdr-nav" aria-label="Main sections">
-          <button type="button" className={`hdr-nav-btn${activeTab === 'sheet' ? ' active' : ''}`} onClick={() => onTabChange('sheet')}>
+          <button type="button" className={`hdr-nav-btn${activeTab === 'sheet' ? ' active' : ''}`} onClick={() => handleTabNavigation('sheet')}>
             <span>Sheet</span>
             <ChevronDown className="hdr-nav-chev" />
           </button>
-          <button type="button" className={`hdr-nav-btn practice-tab${activeTab === 'practice' ? ' active' : ''}`} onClick={() => onTabChange('practice')}>
+          <button type="button" className={`hdr-nav-btn practice-tab${activeTab === 'practice' ? ' active' : ''}`} onClick={() => handleTabNavigation('practice')}>
             <span>Practice</span>
             <ChevronDown className="hdr-nav-chev" />
           </button>
-          <button type="button" className={`hdr-nav-btn streak-tab${activeTab === 'streak' ? ' active' : ''}`} onClick={() => onTabChange('streak')}>
+          <button type="button" className={`hdr-nav-btn streak-tab${activeTab === 'streak' ? ' active' : ''}`} onClick={() => handleTabNavigation('streak')}>
             <span>Streak</span>
             <ChevronDown className="hdr-nav-chev" />
           </button>
@@ -227,7 +283,9 @@ export default function Header({ note, activeTab, onTabChange, streak }) {
               <circle className="bg" cx="18" cy="18" r={RING_R} />
               <circle className="fg" cx="18" cy="18" r={RING_R} strokeDasharray={`${weekFrac * RING_LEN} ${RING_LEN}`} />
             </svg>
-            <div className="hdr-avatar-inner">{initial}</div>
+            <div className="hdr-avatar-inner">
+              {selectedAvatarSrc ? <img src={selectedAvatarSrc} alt="Profile avatar" /> : initial}
+            </div>
           </div>
         </button>
         {streakOpen ? (
@@ -273,6 +331,10 @@ export default function Header({ note, activeTab, onTabChange, streak }) {
             <ChevronDown className="hdr-profile-chev" />
           </summary>
           <div className="hdr-profile-panel">
+            <button type="button" className="hdr-menu-item" onClick={handleProfile} title="Coming soon">
+              <IconUser />
+              <span>My Profile</span>
+            </button>
             <button type="button" className="hdr-menu-item" onClick={handleSettings}>
               <IconSettings />
               <span>Setting</span>

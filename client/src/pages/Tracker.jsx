@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
@@ -21,6 +22,7 @@ function pk(day, pi) {
 const totalProblems = () => DATA.reduce((a, s) => a + s.p.length, 0);
 
 export default function Tracker() {
+  const [searchParams] = useSearchParams();
   const { user, progress, token, loading, login, setProgress } = useAuth();
   const [tab, setTab] = useState('sheet');
   const [loginOpen, setLoginOpen] = useState(false);
@@ -36,6 +38,13 @@ export default function Tracker() {
   const pendingRef = useRef(null);
   const prevTokenRef = useRef(token);
   const hydratedRef = useRef(false);
+
+  useEffect(() => {
+    const fromUrl = searchParams.get('tab');
+    if (fromUrl === 'sheet' || fromUrl === 'practice' || fromUrl === 'streak') {
+      setTab(fromUrl);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     progressRef.current = { sheetDone, practiceDone, streak, openSections };

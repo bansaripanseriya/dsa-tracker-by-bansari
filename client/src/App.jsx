@@ -4,6 +4,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Tracker from './pages/Tracker';
+import Profile from './pages/Profile';
 
 function TrackerWithUserKey() {
   const { user } = useAuth();
@@ -25,6 +26,21 @@ function PublicOnly({ children }) {
   return children;
 }
 
+function ProtectedOnly({ children }) {
+  const { token, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="auth-page">
+        <p className="auth-sub">Loading…</p>
+      </div>
+    );
+  }
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -42,6 +58,14 @@ function AppRoutes() {
           <PublicOnly>
             <Register />
           </PublicOnly>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedOnly>
+            <Profile />
+          </ProtectedOnly>
         }
       />
       <Route path="/" element={<TrackerWithUserKey />} />
