@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Tracker from './pages/Tracker';
 import Profile from './pages/Profile';
 
@@ -57,6 +59,22 @@ function AppRoutes() {
         element={
           <PublicOnly>
             <Register />
+          </PublicOnly>
+        }
+      />
+      <Route
+        path="/forgot-password"
+        element={
+          <PublicOnly>
+            <ForgotPassword />
+          </PublicOnly>
+        }
+      />
+      <Route
+        path="/reset-password"
+        element={
+          <PublicOnly>
+            <ResetPassword />
           </PublicOnly>
         }
       />

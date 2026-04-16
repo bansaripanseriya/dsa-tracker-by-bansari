@@ -24,6 +24,8 @@ const userSchema = new mongoose.Schema(
     },
     passwordHash: { type: String, required: true },
     name: { type: String, trim: true, maxlength: 120, default: '' },
+    passwordResetTokenHash: { type: String, default: null },
+    passwordResetExpires: { type: Date, default: null },
     progress: { type: progressSchema, default: () => ({}) }
   },
   { timestamps: true }

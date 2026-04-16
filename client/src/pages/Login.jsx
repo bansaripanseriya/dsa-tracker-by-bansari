@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -8,10 +8,18 @@ import { mergeGuestProgressAfterAuth } from '../utils/guestProgress';
 export default function Login() {
   const { login, setProgress } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (!location.state?.resetOk) return;
+    setInfo('Your password was updated. Sign in with your new password.');
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -38,6 +46,7 @@ export default function Login() {
         <h1>Sign in</h1>
         <p className="auth-sub">Use your account to sync progress across devices.</p>
         <form onSubmit={handleSubmit}>
+          {info && <div className="auth-info">{info}</div>}
           {error && <div className="auth-error">{error}</div>}
           <label>
             <span>Email</span>
@@ -59,6 +68,11 @@ export default function Login() {
               autoComplete="current-password"
             />
           </label>
+          <div className="auth-forgot-row">
+            <Link to="/forgot-password" className="auth-forgot">
+              Forgot password?
+            </Link>
+          </div>
           <button type="submit" className="auth-submit" disabled={pending}>
             {pending ? 'Signing in…' : 'Sign in'}
           </button>

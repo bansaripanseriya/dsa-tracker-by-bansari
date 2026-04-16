@@ -79,6 +79,16 @@
   border-color: var(--accent);
 }
 
+.auth-info {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
 .auth-error {
   background: rgba(239, 68, 68, 0.12);
   border: 1px solid rgba(239, 68, 68, 0.35);
@@ -87,6 +97,45 @@
   padding: 10px 12px;
   border-radius: 8px;
   margin-bottom: 14px;
+}
+
+.auth-success-msg {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text2);
+  margin: 0 0 14px;
+}
+
+.auth-dev-hint {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.auth-code-inline {
+  font-family: ui-monospace, monospace;
+  font-size: 0.92em;
+}
+
+.auth-forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 12px;
+}
+
+.modal-forgot-row {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.auth-forgot {
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.auth-forgot:hover {
+  text-decoration: underline;
 }
 
 .auth-submit {
@@ -158,6 +207,12 @@ html[data-theme='light'] .auth-error {
   color: #991b1b;
   background: rgba(239, 68, 68, 0.1);
   border-color: rgba(220, 38, 38, 0.35);
+}
+
+html[data-theme='light'] .auth-info {
+  color: #065f46;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(5, 150, 105, 0.35);
 }
 
 button.sec-hd {
@@ -348,6 +403,12 @@ button.day-head {
   border: 2px dashed rgba(185, 28, 28, 0.65);
   background: rgba(239, 68, 68, 0.12);
   color: #9f1239;
+}
+
+.auth-info {
+  border: 2px dashed rgba(5, 150, 105, 0.55);
+  background: rgba(16, 185, 129, 0.12);
+  color: #065f46;
 }
 
 .modal-close {

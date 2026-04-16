@@ -73,6 +73,11 @@ export default function LoginModal({ open, title, onClose, onSubmit }) {
               autoComplete="current-password"
             />
           </label>
+          <div className="auth-forgot-row modal-forgot-row">
+            <Link to="/forgot-password" className="auth-forgot" onClick={onClose}>
+              Forgot password?
+            </Link>
+          </div>
           <button type="submit" className="auth-submit" disabled={pending}>
             {pending ? 'Signing in…' : 'Sign in'}
           </button>
