@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../api/client';
 import {
   buildLearningTimeChart,
@@ -13,6 +13,142 @@ import {
 import { computeSheetStats } from '../../utils/sheetStats';
 
 const DOW_SHORT = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+function stripHtml(value) {
+  return (value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeEditorHtml(value) {
+  return (value || '')
+    .replace(/\sdir=(["'])rtl\1/gi, ' dir="ltr"')
+    .replace(/\salign=(["'])right\1/gi, ' align="left"')
+    .replace(/text-align\s*:\s*right/gi, 'text-align:left')
+    .replace(/direction\s*:\s*rtl/gi, 'direction:ltr');
+}
+
+function NoteHtml({ html, className = '' }) {
+  return <div className={className} dangerouslySetInnerHTML={{ __html: html || '' }} />;
+}
+
+function NotesToolbarIcon({ children }) {
+  return <span className="notes-toolbar-icon" aria-hidden="true">{children}</span>;
+}
+
+function IconTrash() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="notes-toolbar-svg">
+      <path d="M9 3h6l1 2h4v2H4V5h4l1-2Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 7h12l-1 13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 11v6M14 11v6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconClose() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="notes-toolbar-svg">
+      <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconAlignLeft() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="notes-toolbar-svg">
+      <path d="M4 6h14M4 10h10M4 14h14M4 18h10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconAlignCenter() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="notes-toolbar-svg">
+      <path d="M5 6h14M7 10h10M5 14h14M7 18h10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconAlignRight() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="notes-toolbar-svg">
+      <path d="M6 6h14M10 10h10M6 14h14M10 18h10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconEditor() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="notes-toolbar-svg">
+      <path d="M4 5h16v14H4z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M8 9h8M8 13h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="m14 16 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconList() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="notes-toolbar-svg">
+      <path d="M8 7h11M8 12h11M8 17h11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="5" cy="7" r="1.2" fill="currentColor" />
+      <circle cx="5" cy="12" r="1.2" fill="currentColor" />
+      <circle cx="5" cy="17" r="1.2" fill="currentColor" />
+    </svg>
+  );
+}
+
+function PriorityOption({ value, current, onChange }) {
+  return (
+    <button
+      type="button"
+      className={`notes-priority-chip notes-priority-chip-${value.toLowerCase()}${current === value ? ' active' : ''}`}
+      onClick={() => onChange(value)}
+    >
+      <i />
+      {value}
+    </button>
+  );
+}
+
+function forceEditorLtr(editor) {
+  if (!editor) return;
+  editor.setAttribute('dir', 'ltr');
+  editor.style.direction = 'ltr';
+  editor.style.textAlign = 'left';
+  editor.style.unicodeBidi = 'isolate';
+  editor.style.writingMode = 'horizontal-tb';
+  document.execCommand('styleWithCSS', false, true);
+  document.execCommand('justifyLeft');
+}
+
+function insertInlineCodePlaceholder(editor) {
+  if (!editor) return;
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    editor.focus();
+  }
+  const activeSelection = window.getSelection();
+  if (!activeSelection || activeSelection.rangeCount === 0) return;
+
+  const range = activeSelection.getRangeAt(0);
+  const code = document.createElement('code');
+  code.className = 'notes-inline-code';
+  code.setAttribute('data-placeholder', 'code');
+
+  if (!range.collapsed) {
+    const contents = range.extractContents();
+    code.appendChild(contents);
+  }
+
+  range.deleteContents();
+  range.insertNode(code);
+
+  const nextRange = document.createRange();
+  nextRange.selectNodeContents(code);
+  nextRange.collapse(false);
+  activeSelection.removeAllRanges();
+  activeSelection.addRange(nextRange);
+}
 
 /** Heatmap column stride (px); keep in sync with `.gh-cell` + gap in main.css */
 const GH_CELL = 12;
@@ -257,6 +393,11 @@ function CalendarCard({ checkins }) {
 }
 
 export default function StreakTab({ streak, doCheckin, authenticated = true, sheetDone = [], displayName = '' }) {
+  const modalTitleRef = useRef(null);
+  const modalBodyRef = useRef(null);
+  const boardTitleRef = useRef(null);
+  const boardBodyRef = useRef(null);
+
   const checkins = streak.checkins || [];
   const s = calcStreak(checkins);
   const submissionHistory = useMemo(
@@ -319,6 +460,7 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
   const [notesSearch, setNotesSearch] = useState('');
   const [activeNoteId, setActiveNoteId] = useState(null);
   const [notesLoaded, setNotesLoaded] = useState(!authenticated);
+  const [mobileNotesEditorOpen, setMobileNotesEditorOpen] = useState(false);
 
   useEffect(() => {
     if (authenticated) return;
@@ -421,6 +563,7 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
   function openNotesBoard() {
     setNotesBoardOpen(true);
     setNotesSearch('');
+    setMobileNotesEditorOpen(false);
     if (!activeNoteId && notes.length) {
       setActiveNoteId(notes[0].id);
     }
@@ -428,6 +571,7 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
 
   function closeNotesBoard() {
     setNotesBoardOpen(false);
+    setMobileNotesEditorOpen(false);
   }
 
   function addNoteFromBoard() {
@@ -450,6 +594,7 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
     };
     setNotes((prev) => [nextNote, ...prev]);
     setActiveNoteId(nextNote.id);
+    setMobileNotesEditorOpen(true);
   }
 
   function deleteActiveNote() {
@@ -466,10 +611,47 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
     setNotes((prev) => prev.map((n) => (n.id === activeNoteId ? { ...n, ...patch } : n)));
   }
 
+  function applyModalFormat(kind) {
+    const editor = modalBodyRef.current;
+    if (!editor) return;
+    editor.focus();
+    forceEditorLtr(editor);
+    if (kind === 'bold') document.execCommand('bold');
+    else if (kind === 'italic') document.execCommand('italic');
+    else if (kind === 'underline') document.execCommand('underline');
+    else if (kind === 'bullet') document.execCommand('insertUnorderedList');
+    else if (kind === 'number') document.execCommand('insertOrderedList');
+    else if (kind === 'alignLeft') document.execCommand('justifyLeft');
+    else if (kind === 'alignCenter') document.execCommand('justifyCenter');
+    else if (kind === 'alignRight') document.execCommand('justifyRight');
+    else if (kind === 'quote') document.execCommand('formatBlock', false, 'blockquote');
+    else if (kind === 'code') insertInlineCodePlaceholder(editor);
+    setNoteBody(normalizeEditorHtml(editor.innerHTML));
+  }
+
+  function applyBoardFormat(kind) {
+    if (!activeNote) return;
+    const editor = boardBodyRef.current;
+    if (!editor) return;
+    editor.focus();
+    forceEditorLtr(editor);
+    if (kind === 'bold') document.execCommand('bold');
+    else if (kind === 'italic') document.execCommand('italic');
+    else if (kind === 'underline') document.execCommand('underline');
+    else if (kind === 'bullet') document.execCommand('insertUnorderedList');
+    else if (kind === 'number') document.execCommand('insertOrderedList');
+    else if (kind === 'alignLeft') document.execCommand('justifyLeft');
+    else if (kind === 'alignCenter') document.execCommand('justifyCenter');
+    else if (kind === 'alignRight') document.execCommand('justifyRight');
+    else if (kind === 'quote') document.execCommand('formatBlock', false, 'blockquote');
+    else if (kind === 'code') insertInlineCodePlaceholder(editor);
+    updateActiveNote({ body: normalizeEditorHtml(editor.innerHTML) });
+  }
+
   const filteredNotes = notes.filter((n) => {
     const q = notesSearch.trim().toLowerCase();
     if (!q) return true;
-    return `${n.title} ${n.body}`.toLowerCase().includes(q);
+    return `${n.title} ${stripHtml(n.body)}`.toLowerCase().includes(q);
   });
 
   const activeNote = notes.find((n) => n.id === activeNoteId) || filteredNotes[0] || null;
@@ -480,6 +662,26 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
       setActiveNoteId(filteredNotes[0].id);
     }
   }, [notesBoardOpen, filteredNotes, activeNoteId]);
+
+  useEffect(() => {
+    if (!notesOpen || !modalBodyRef.current) return;
+    const editor = modalBodyRef.current;
+    if (document.activeElement === editor) return;
+    editor.innerHTML = normalizeEditorHtml(noteBody);
+    forceEditorLtr(editor);
+  }, [notesOpen]);
+
+  useEffect(() => {
+    if (!notesBoardOpen || !boardBodyRef.current) return;
+    const editor = boardBodyRef.current;
+    if (!activeNote) {
+      editor.innerHTML = '';
+      return;
+    }
+    if (document.activeElement === editor) return;
+    editor.innerHTML = normalizeEditorHtml(activeNote.body);
+    forceEditorLtr(editor);
+  }, [notesBoardOpen, activeNoteId]);
 
   return (
     <div className="streak-dashboard streak-modern">
@@ -601,7 +803,7 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
                     <strong>{n.title}</strong>
                     <span className={`note-priority note-priority-${n.priority.toLowerCase()}`}>{n.priority}</span>
                   </div>
-                  {n.body ? <p>{n.body}</p> : null}
+                  {n.body ? <NoteHtml className="note-preview-html" html={n.body} /> : null}
                   <div className="note-meta">
                     <span>{n.lang}</span>
                     <span>{n.prettyTime}</span>
@@ -771,12 +973,15 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
           <button type="button" className="notes-modal-backdrop" aria-label="Close notes popup" onClick={closeNotesPopup} />
           <div className="notes-modal-panel">
             <div className="notes-toolbar">
-              <div className="notes-toolbar-left" aria-hidden="true">
-                <span>B</span>
-                <span>I</span>
-                <span>U</span>
-                <span>•</span>
-                <span>1.</span>
+              <div className="notes-toolbar-left">
+                <button type="button" className="notes-board-action" aria-label="Bold" title="Bold" onClick={() => applyModalFormat('bold')}>B</button>
+                <button type="button" className="notes-board-action" aria-label="Italic" title="Italic" onClick={() => applyModalFormat('italic')}>I</button>
+                <button type="button" className="notes-board-action" aria-label="Underline" title="Underline" onClick={() => applyModalFormat('underline')}>U</button>
+                <button type="button" className="notes-board-action" aria-label="Bulleted list" title="Bulleted list" onClick={() => applyModalFormat('bullet')}>UL</button>
+                <button type="button" className="notes-board-action" aria-label="Numbered list" title="Numbered list" onClick={() => applyModalFormat('number')}>OL</button>
+                <button type="button" className="notes-board-action" aria-label="Align left" title="Align left" onClick={() => applyModalFormat('alignLeft')}>L</button>
+                <button type="button" className="notes-board-action" aria-label="Align center" title="Align center" onClick={() => applyModalFormat('alignCenter')}>C</button>
+                <button type="button" className="notes-board-action" aria-label="Align right" title="Align right" onClick={() => applyModalFormat('alignRight')}>R</button>
               </div>
               <label>
                 <span className="learn-period-sr">Language</span>
@@ -801,17 +1006,25 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
               </button>
             </div>
             <input
+              ref={modalTitleRef}
               type="text"
               className="notes-title-input"
               placeholder="Untitled"
               value={noteTitle}
               onChange={(e) => setNoteTitle(e.target.value)}
             />
-            <textarea
-              className="notes-textarea"
-              placeholder="Write your notes..."
-              value={noteBody}
-              onChange={(e) => setNoteBody(e.target.value)}
+            <div
+              ref={modalBodyRef}
+              className={`notes-textarea notes-rich-editor${!stripHtml(noteBody) ? ' is-empty' : ''}`}
+              contentEditable
+              suppressContentEditableWarning
+              dir="ltr"
+              data-placeholder="Write your notes..."
+              onFocus={(e) => forceEditorLtr(e.currentTarget)}
+              onInput={(e) => {
+                forceEditorLtr(e.currentTarget);
+                setNoteBody(normalizeEditorHtml(e.currentTarget.innerHTML));
+              }}
             />
             <div className="notes-modal-foot">
               <span>{new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</span>
@@ -826,16 +1039,42 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
       {notesBoardOpen ? (
         <div className="notes-board-root" role="dialog" aria-modal="true" aria-label="All notes">
           <button type="button" className="notes-modal-backdrop" aria-label="Close notes board" onClick={closeNotesBoard} />
-          <div className="notes-board-panel">
-            <aside className="notes-board-side">
-              <div className="notes-board-title">Notes</div>
+          <div className={`notes-board-panel${mobileNotesEditorOpen ? ' notes-board-panel-mobile-editor' : ' notes-board-panel-mobile-list'}`}>
+            <aside className={`notes-board-side${mobileNotesEditorOpen ? ' notes-board-side-mobile-hidden' : ''}`}>
+              <div className="notes-board-title-row">
+                <div className="notes-board-title">Notes</div>
+                <button
+                  type="button"
+                  className="notes-mobile-switch-btn"
+                  aria-label="Open editor"
+                  title="Open editor"
+                  onClick={() => setMobileNotesEditorOpen(true)}
+                >
+                  <IconEditor />
+                </button>
+              </div>
+              <div className="notes-board-side-search">
+                <div className="notes-board-search-wrap">
+                  <span className="notes-board-search-icon" aria-hidden="true">⌕</span>
+                  <input
+                    type="search"
+                    className="notes-board-search"
+                    placeholder="Search"
+                    value={notesSearch}
+                    onChange={(e) => setNotesSearch(e.target.value)}
+                  />
+                </div>
+              </div>
               <div className="notes-board-list">
                 {filteredNotes.map((n) => (
                   <button
                     key={n.id}
                     type="button"
                     className={`notes-board-item${activeNote?.id === n.id ? ' active' : ''}`}
-                    onClick={() => setActiveNoteId(n.id)}
+                    onClick={() => {
+                      setActiveNoteId(n.id);
+                      setMobileNotesEditorOpen(true);
+                    }}
                   >
                     <strong>{n.title || 'Untitled'}</strong>
                     <span>{n.prettyTime || 'Today'}</span>
@@ -845,24 +1084,43 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
                 {!filteredNotes.length ? <div className="notes-board-empty">No notes found.</div> : null}
               </div>
             </aside>
-            <section className="notes-board-main">
+            <section className={`notes-board-main${mobileNotesEditorOpen ? ' notes-board-main-mobile-active' : ''}`}>
               <div className="notes-board-toolbar">
-                <div className="notes-toolbar-left" aria-hidden="true">
-                  <span>B</span>
-                  <span>I</span>
-                  <span>U</span>
-                  <span>•</span>
-                  <span>1.</span>
-                  <span>{'<'}</span>
-                  <span>{'>'}</span>
+                <div className="notes-board-toolbar-left">
+                  <button
+                    type="button"
+                    className="notes-mobile-switch-btn"
+                    aria-label="Back to notes list"
+                    title="Back to notes list"
+                    onClick={() => setMobileNotesEditorOpen(false)}
+                  >
+                    <IconList />
+                  </button>
+                  <div className="notes-board-toolbar-group">
+                    <button type="button" className="notes-board-action" aria-label="Delete note" title="Delete note" onClick={deleteActiveNote}>
+                      <IconTrash />
+                    </button>
+                    <button type="button" className="notes-board-action" aria-label="New note" title="New note" onClick={addNoteFromBoard}>
+                      <NotesToolbarIcon>＋</NotesToolbarIcon>
+                    </button>
+                  </div>
+                  <div className="notes-board-toolbar-group">
+                    <button type="button" className="notes-board-action" aria-label="Bold" title="Bold" onClick={() => applyBoardFormat('bold')}><NotesToolbarIcon>B</NotesToolbarIcon></button>
+                    <button type="button" className="notes-board-action" aria-label="Italic" title="Italic" onClick={() => applyBoardFormat('italic')}><NotesToolbarIcon>I</NotesToolbarIcon></button>
+                    <button type="button" className="notes-board-action" aria-label="Underline" title="Underline" onClick={() => applyBoardFormat('underline')}><NotesToolbarIcon>U</NotesToolbarIcon></button>
+                    <button type="button" className="notes-board-action" aria-label="Bulleted list" title="Bulleted list" onClick={() => applyBoardFormat('bullet')}><NotesToolbarIcon>•≡</NotesToolbarIcon></button>
+                    <button type="button" className="notes-board-action" aria-label="Numbered list" title="Numbered list" onClick={() => applyBoardFormat('number')}><NotesToolbarIcon>1≡</NotesToolbarIcon></button>
+                    <button type="button" className="notes-board-action" aria-label="Quote" title="Quote" onClick={() => applyBoardFormat('quote')}><NotesToolbarIcon>❝</NotesToolbarIcon></button>
+                    <button type="button" className="notes-board-action" aria-label="Inline code" title="Inline code" onClick={() => applyBoardFormat('code')}><NotesToolbarIcon>{'<>'}</NotesToolbarIcon></button>
+                  </div>
+                  <div className="notes-board-toolbar-group">
+                    <button type="button" className="notes-board-action" aria-label="Align left" title="Align left" onClick={() => applyBoardFormat('alignLeft')}><IconAlignLeft /></button>
+                    <button type="button" className="notes-board-action" aria-label="Align center" title="Align center" onClick={() => applyBoardFormat('alignCenter')}><IconAlignCenter /></button>
+                    <button type="button" className="notes-board-action" aria-label="Align right" title="Align right" onClick={() => applyBoardFormat('alignRight')}><IconAlignRight /></button>
+                  </div>
                 </div>
-                <button type="button" className="notes-board-action" onClick={deleteActiveNote}>
-                  🗑
-                </button>
-                <button type="button" className="notes-board-action" onClick={addNoteFromBoard}>
-                  ＋
-                </button>
-                <label>
+                <div className="notes-board-toolbar-right">
+                  <label className="notes-lang-select">
                   <span className="learn-period-sr">Language</span>
                   <select value={activeNote?.lang || 'JavaScript'} onChange={(e) => updateActiveNote({ lang: e.target.value })}>
                     <option>JavaScript</option>
@@ -871,42 +1129,43 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
                     <option>CPP</option>
                     <option>Text</option>
                   </select>
-                </label>
-                <label>
-                  <span className="learn-period-sr">Priority</span>
-                  <select value={activeNote?.priority || 'Low'} onChange={(e) => updateActiveNote({ priority: e.target.value })}>
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                  </select>
-                </label>
-                <input
-                  type="search"
-                  className="notes-board-search"
-                  placeholder="Search"
-                  value={notesSearch}
-                  onChange={(e) => setNotesSearch(e.target.value)}
-                />
-                <button type="button" className="notes-close-btn" aria-label="Close notes board" onClick={closeNotesBoard}>
-                  ×
-                </button>
+                  </label>
+                  <button type="button" className="notes-close-btn" aria-label="Close notes board" onClick={closeNotesBoard}>
+                    <IconClose />
+                  </button>
+                </div>
               </div>
               {activeNote ? (
                 <>
                   <div className="notes-board-meta">
                     <span>{activeNote.prettyTime || 'Today'}</span>
-                    <span className={`note-priority note-priority-${activeNote.priority.toLowerCase()}`}>{activeNote.priority}</span>
+                    <div className="notes-priority-group">
+                      <span className="notes-priority-label">Priority:</span>
+                      <PriorityOption value="Low" current={activeNote.priority} onChange={(value) => updateActiveNote({ priority: value })} />
+                      <PriorityOption value="Medium" current={activeNote.priority} onChange={(value) => updateActiveNote({ priority: value })} />
+                      <PriorityOption value="High" current={activeNote.priority} onChange={(value) => updateActiveNote({ priority: value })} />
+                    </div>
                   </div>
                   <input
+                    ref={boardTitleRef}
                     type="text"
                     className="notes-title-input notes-board-title-input"
+                    dir="ltr"
                     value={activeNote.title}
                     onChange={(e) => updateActiveNote({ title: e.target.value })}
                   />
-                  <textarea
-                    className="notes-textarea notes-board-textarea"
-                    value={activeNote.body}
-                    onChange={(e) => updateActiveNote({ body: e.target.value })}
+                  <div
+                    ref={boardBodyRef}
+                    className={`notes-textarea notes-board-textarea notes-rich-editor${!stripHtml(activeNote.body) ? ' is-empty' : ''}`}
+                    contentEditable
+                    suppressContentEditableWarning
+                    dir="ltr"
+                    data-placeholder="Write your notes..."
+                    onFocus={(e) => forceEditorLtr(e.currentTarget)}
+                    onInput={(e) => {
+                      forceEditorLtr(e.currentTarget);
+                      updateActiveNote({ body: normalizeEditorHtml(e.currentTarget.innerHTML) });
+                    }}
                   />
                 </>
               ) : (
