@@ -30,11 +30,13 @@ export default function Tracker() {
 
   const [sheetDone, setSheetDone] = useState([]);
   const [practiceDone, setPracticeDone] = useState([]);
+  const [sheetSaved, setSheetSaved] = useState([]);
+  const [practiceSaved, setPracticeSaved] = useState([]);
   const [streak, setStreak] = useState({ checkins: [] });
   const [openSections, setOpenSections] = useState([1, 2, 3]);
   const [openDays, setOpenDays] = useState([1]);
 
-  const progressRef = useRef({ sheetDone, practiceDone, streak, openSections });
+  const progressRef = useRef({ sheetDone, practiceDone, sheetSaved, practiceSaved, streak, openSections });
   const pendingRef = useRef(null);
   const prevTokenRef = useRef(token);
   const hydratedRef = useRef(false);
@@ -47,8 +49,8 @@ export default function Tracker() {
   }, [searchParams]);
 
   useEffect(() => {
-    progressRef.current = { sheetDone, practiceDone, streak, openSections };
-  }, [sheetDone, practiceDone, streak, openSections]);
+    progressRef.current = { sheetDone, practiceDone, sheetSaved, practiceSaved, streak, openSections };
+  }, [sheetDone, practiceDone, sheetSaved, practiceSaved, streak, openSections]);
 
   useEffect(() => {
     const prev = prevTokenRef.current;
@@ -68,6 +70,8 @@ export default function Tracker() {
     const g = loadGuestProgress();
     setSheetDone(g.sheetDone);
     setPracticeDone(g.practiceDone);
+    setSheetSaved(g.sheetSaved || []);
+    setPracticeSaved(g.practiceSaved || []);
     setStreak(g.streak);
     setOpenSections(g.openSections?.length ? g.openSections : [1, 2, 3]);
     hydratedRef.current = true;
@@ -78,6 +82,8 @@ export default function Tracker() {
     if (!token || !user || progress == null) return;
     setSheetDone(progress.sheetDone || []);
     setPracticeDone(progress.practiceDone || []);
+    setSheetSaved(progress.sheetSaved || []);
+    setPracticeSaved(progress.practiceSaved || []);
     setStreak(progress.streak && Array.isArray(progress.streak.checkins) ? { checkins: [...progress.streak.checkins] } : { checkins: [] });
     setOpenSections(progress.openSections?.length ? [...progress.openSections] : [1, 2, 3]);
     hydratedRef.current = true;
@@ -99,7 +105,7 @@ export default function Tracker() {
       return () => clearTimeout(t);
     }
     return undefined;
-  }, [sheetDone, practiceDone, streak.checkins, openSections, token]);
+  }, [sheetDone, practiceDone, sheetSaved, practiceSaved, streak.checkins, openSections, token]);
 
   useEffect(() => {
     if (!hydratedRef.current || !token || !user) return;
@@ -108,13 +114,15 @@ export default function Tracker() {
         .put('/progress', {
           sheetDone,
           practiceDone,
+          sheetSaved,
+          practiceSaved,
           streak: { checkins: streak.checkins || [] },
           openSections
         })
         .catch(() => {});
     }, 1200);
     return () => clearTimeout(t);
-  }, [sheetDone, practiceDone, streak.checkins, openSections, token, user]);
+  }, [sheetDone, practiceDone, sheetSaved, practiceSaved, streak.checkins, openSections, token, user]);
 
   const _toggleSheet = useCallback((sid, pi) => {
     const k = key(sid, pi);
@@ -137,6 +145,29 @@ export default function Tracker() {
       _toggleSheet(sid, pi);
     },
     [token, _toggleSheet]
+  );
+
+  const _toggleSheetSaved = useCallback((sid, pi) => {
+    const k = key(sid, pi);
+    setSheetSaved((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return [...next];
+    });
+  }, []);
+
+  const toggleSheetSaved = useCallback(
+    (sid, pi) => {
+      if (!token) {
+        pendingRef.current = { type: 'sheetSaved', sid, pi };
+        setLoginTitle('Sign in to save problems');
+        setLoginOpen(true);
+        return;
+      }
+      _toggleSheetSaved(sid, pi);
+    },
+    [token, _toggleSheetSaved]
   );
 
   const _togglePrac = useCallback((day, pi) => {
@@ -166,6 +197,29 @@ export default function Tracker() {
       _togglePrac(day, pi);
     },
     [token, _togglePrac]
+  );
+
+  const _togglePracSaved = useCallback((day, pi) => {
+    const k = pk(day, pi);
+    setPracticeSaved((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return [...next];
+    });
+  }, []);
+
+  const togglePracSaved = useCallback(
+    (day, pi) => {
+      if (!token) {
+        pendingRef.current = { type: 'practiceSaved', day, pi };
+        setLoginTitle('Sign in to save problems');
+        setLoginOpen(true);
+        return;
+      }
+      _togglePracSaved(day, pi);
+    },
+    [token, _togglePracSaved]
   );
 
   const toggleSec = useCallback((id) => {
@@ -208,6 +262,8 @@ export default function Tracker() {
       const { data: saved } = await api.put('/progress', {
         sheetDone: merged.sheetDone,
         practiceDone: merged.practiceDone,
+        sheetSaved: merged.sheetSaved,
+        practiceSaved: merged.practiceSaved,
         streak: { checkins: merged.streak.checkins || [] },
         openSections: merged.openSections
       });
@@ -215,6 +271,8 @@ export default function Tracker() {
       setProgress(next);
       setSheetDone(next.sheetDone || []);
       setPracticeDone(next.practiceDone || []);
+      setSheetSaved(next.sheetSaved || []);
+      setPracticeSaved(next.practiceSaved || []);
       setStreak(next.streak && Array.isArray(next.streak.checkins) ? { checkins: [...next.streak.checkins] } : { checkins: [] });
       setOpenSections(next.openSections?.length ? [...next.openSections] : [1, 2, 3]);
       hydratedRef.current = true;
@@ -239,10 +297,24 @@ export default function Tracker() {
       <Header note={note} activeTab={tab} onTabChange={setTab} streak={streak} />
 
       <div className={`tab-pane${tab === 'sheet' ? ' visible' : ''}`} id="tab-sheet">
-        <SheetTab sheetDone={sheetDone} toggleSheet={toggleSheet} openSections={openSections} toggleSec={toggleSec} />
+        <SheetTab
+          sheetDone={sheetDone}
+          sheetSaved={sheetSaved}
+          toggleSheet={toggleSheet}
+          toggleSheetSaved={toggleSheetSaved}
+          openSections={openSections}
+          toggleSec={toggleSec}
+        />
       </div>
       <div className={`tab-pane${tab === 'practice' ? ' visible' : ''}`} id="tab-practice">
-        <PracticeTab practiceDone={practiceDone} togglePrac={togglePrac} openDays={openDays} toggleDay={toggleDay} />
+        <PracticeTab
+          practiceDone={practiceDone}
+          practiceSaved={practiceSaved}
+          togglePrac={togglePrac}
+          togglePracSaved={togglePracSaved}
+          openDays={openDays}
+          toggleDay={toggleDay}
+        />
       </div>
       <div className={`tab-pane${tab === 'streak' ? ' visible' : ''}`} id="tab-streak">
         <StreakTab

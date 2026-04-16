@@ -197,7 +197,7 @@ html[data-theme="light"] .hdr-nav-btn:hover{background:rgba(15,23,42,0.05)}
 
 /* PROBLEM ROWS */
 .plist{border-top:1px solid var(--border)}
-.pr{display:grid;grid-template-columns:26px 1fr auto auto auto;align-items:center;gap:10px;padding:10px 15px;border-bottom:1px solid var(--border);transition:background .1s}
+.pr{display:grid;grid-template-columns:26px 1fr auto auto auto auto;align-items:center;gap:10px;padding:10px 15px;border-bottom:1px solid var(--border);transition:background .1s}
 .pr:last-child{border-bottom:none}
 .pr:hover{background:var(--surface2)}
 .chk{position:relative;width:19px;height:19px;border-radius:0;border:2px solid #2a2a2a;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:#fff;transition:border-color .15s;transform:rotate(-1.4deg)}
@@ -214,6 +214,11 @@ html[data-theme="light"] .hdr-nav-btn:hover{background:rgba(15,23,42,0.05)}
   transform:rotate(3.2deg);
   pointer-events:none;
 }
+.save-btn{position:relative;width:34px;height:34px;border:none;background:transparent;color:var(--text3);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .15s,filter .15s,opacity .15s,color .15s;flex-shrink:0;padding:0;opacity:.96}
+.save-btn::before{content:none}
+.save-btn:hover{color:var(--text2);filter:drop-shadow(0 1px 0 rgba(34,34,34,0.08))}
+.save-btn.saved{color:#efbf1a}
+.save-btn svg{flex-shrink:0;transform:rotate(-6deg)}
 .pn{font-size:15px;color:var(--text);line-height:1.45}
 .pn.done{text-decoration:line-through;color:var(--text3)}
 .prob-num{font-size:12px;color:var(--text3);font-family:'Space Mono',monospace;white-space:nowrap}
@@ -516,6 +521,7 @@ html[data-theme="light"] .gh-cell.on{box-shadow:0 0 8px rgba(22,163,74,0.25)}
 .gh-year-btn:focus-visible,
 .hdr-icon-btn:focus-visible,
 .hdr-mobile-menu-btn:focus-visible,
+.save-btn:focus-visible,
 .notes-board-action:focus-visible,
 .notes-mobile-switch-btn:focus-visible,
 .notes-close-btn:focus-visible{
@@ -531,6 +537,7 @@ html[data-theme="light"] .gh-cell.on{box-shadow:0 0 8px rgba(22,163,74,0.25)}
 .gh-year-btn:active:not(:disabled),
 .hdr-icon-btn:active:not(:disabled),
 .hdr-mobile-menu-btn:active:not(:disabled),
+.save-btn:active:not(:disabled),
 .notes-board-action:active:not(:disabled),
 .notes-mobile-switch-btn:active:not(:disabled),
 .notes-close-btn:active:not(:disabled){
@@ -547,6 +554,7 @@ html[data-theme="light"] .learn-week-nav:active:not(:disabled),
 html[data-theme="light"] .gh-year-btn:active:not(:disabled),
 html[data-theme="light"] .hdr-icon-btn:active:not(:disabled),
 html[data-theme="light"] .hdr-mobile-menu-btn:active:not(:disabled),
+html[data-theme="light"] .save-btn:active:not(:disabled),
 html[data-theme="light"] .notes-board-action:active:not(:disabled),
 html[data-theme="light"] .notes-mobile-switch-btn:active:not(:disabled),
 html[data-theme="light"] .notes-close-btn:active:not(:disabled){
@@ -561,6 +569,7 @@ html[data-theme="dark"] .learn-week-nav:active:not(:disabled),
 html[data-theme="dark"] .gh-year-btn:active:not(:disabled),
 html[data-theme="dark"] .hdr-icon-btn:active:not(:disabled),
 html[data-theme="dark"] .hdr-mobile-menu-btn:active:not(:disabled),
+html[data-theme="dark"] .save-btn:active:not(:disabled),
 html[data-theme="dark"] .notes-board-action:active:not(:disabled),
 html[data-theme="dark"] .notes-mobile-switch-btn:active:not(:disabled),
 html[data-theme="dark"] .notes-close-btn:active:not(:disabled){
@@ -925,7 +934,7 @@ html[data-theme="dark"] .notes-board-empty-main{color:#f3f4f6}
 .day-chev{font-size:11px;color:var(--text3);transition:transform .2s}
 .day-chev.op{transform:rotate(90deg)}
 .day-problems{border-top:1px solid var(--border)}
-.dp-row{display:grid;grid-template-columns:26px auto 1fr auto auto auto;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);transition:background .1s}
+.dp-row{display:grid;grid-template-columns:26px auto 1fr auto auto 34px;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);transition:background .1s}
 .dp-row:last-child{border-bottom:none}
 .dp-row:hover{background:var(--surface2)}
 .dp-num-badge{font-size:11px;font-weight:700;font-family:"Space Mono",monospace;width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -1354,14 +1363,16 @@ html[data-theme="dark"] .streak-modern .cal-grid-head span{
   .sec-bar{width:52px}
   .db{font-size:14px}
   .lc-btn{font-size:14px}
-  .pr{grid-template-columns:24px minmax(0,1fr);grid-template-areas:"check name" "check meta";row-gap:6px}
+  .pr{grid-template-columns:24px minmax(0,1fr) 34px;grid-template-areas:"check name save" ". meta meta";row-gap:6px}
   .pr .chk{grid-area:check}
+  .pr .save-btn{grid-area:save}
   .pr .pn{grid-area:name;word-break:break-word}
   .pr .db,.pr .lc-btn,.pr .no-lc{grid-area:meta}
   .pr .db{justify-self:start}
   .pr .lc-btn,.pr .no-lc{justify-self:end}
-  .dp-row{grid-template-columns:22px 22px minmax(0,1fr);grid-template-areas:"check badge name" ". meta meta";row-gap:7px}
+  .dp-row{grid-template-columns:22px 22px minmax(0,1fr) 34px;grid-template-areas:"check badge name save" ". meta meta meta";row-gap:7px}
   .dp-row .chk{grid-area:check}
+  .dp-row .save-btn{grid-area:save}
   .dp-row .dp-num-badge{grid-area:badge}
   .dp-row .dp-name{grid-area:name;word-break:break-word}
   .dp-row .lc-num{grid-area:meta;justify-self:start}

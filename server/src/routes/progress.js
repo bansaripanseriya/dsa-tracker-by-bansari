@@ -22,6 +22,10 @@ router.put(
     body('sheetDone.*').optional().isString(),
     body('practiceDone').optional().isArray(),
     body('practiceDone.*').optional().isString(),
+    body('sheetSaved').optional().isArray(),
+    body('sheetSaved.*').optional().isString(),
+    body('practiceSaved').optional().isArray(),
+    body('practiceSaved.*').optional().isString(),
     body('streak').optional().isObject(),
     body('streak.checkins').optional().isArray(),
     body('streak.checkins.*').optional().isString(),
@@ -41,6 +45,8 @@ router.put(
     if (!user.progress) user.progress = {};
     if (Array.isArray(p.sheetDone)) user.progress.sheetDone = p.sheetDone;
     if (Array.isArray(p.practiceDone)) user.progress.practiceDone = p.practiceDone;
+    if (Array.isArray(p.sheetSaved)) user.progress.sheetSaved = p.sheetSaved;
+    if (Array.isArray(p.practiceSaved)) user.progress.practiceSaved = p.practiceSaved;
     if (p.streak && Array.isArray(p.streak.checkins)) {
       user.progress.streak = user.progress.streak || {};
       user.progress.streak.checkins = p.streak.checkins;

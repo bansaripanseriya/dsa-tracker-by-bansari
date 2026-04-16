@@ -14,8 +14,23 @@ function cntDiff(d) {
   return DATA.reduce((a, s) => a + s.p.filter((p) => p[2] === d).length, 0);
 }
 
-export default function SheetTab({ sheetDone, toggleSheet, openSections, toggleSec }) {
+function StarIcon({ filled = false }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {filled ? <path d="M15.9 4.4 19.3 11 26.5 12.1 21.2 17.1 22.5 24.3 15.9 20.9 9.3 24.3 10.6 17.1 5.3 12.1 12.5 11 15.9 4.4Z" fill="rgba(255, 205, 53, 0.18)" stroke="none" /> : null}
+      <path strokeWidth="1.9" d="M16 4.2 19.4 10.9 26.7 12.1 21.3 17.3 22.6 24.5 16 21 9.4 24.5 10.7 17.3 5.3 12.1 12.6 10.9 16 4.2Z" />
+      <path strokeWidth="1.5" d="M15.2 5.5 18.1 11.3 24.6 12.3 19.8 16.9 20.9 23.3 15.2 20.3 9.6 23.3 10.7 16.9 5.8 12.3 12.3 11.3 15.2 5.5Z" opacity="0.95" />
+      <path strokeWidth="1.25" d="M16.8 6.4 18.9 11 24.2 11.8 20.3 15.6 21.3 21 16.8 18.6 12.3 21 13.2 15.6 9.4 11.8 14.6 11 16.8 6.4Z" opacity="0.85" />
+      <path strokeWidth="1.15" d="M11.2 13.8 16.1 10.8 20.6 13.5" opacity="0.7" />
+      <path strokeWidth="1.05" d="M12.4 17.1 16.1 14.8 19.8 16.9" opacity="0.72" />
+      <path strokeWidth="1" d="M13.2 20.1 16.1 18.3 18.9 19.9" opacity="0.7" />
+    </svg>
+  );
+}
+
+export default function SheetTab({ sheetDone, sheetSaved, toggleSheet, toggleSheetSaved, openSections, toggleSec }) {
   const doneSet = useMemo(() => new Set(sheetDone), [sheetDone]);
+  const savedSet = useMemo(() => new Set(sheetSaved), [sheetSaved]);
   const [filt, setFilt] = useState('all');
   const [q, setQ] = useState('');
 
@@ -58,10 +73,11 @@ export default function SheetTab({ sheetDone, toggleSheet, openSections, toggleS
           const k = key(s.id, p._i);
           if (filt === 'done') return doneSet.has(k);
           if (filt === 'todo') return !doneSet.has(k);
+          if (filt === 'saved') return savedSet.has(k);
           if (filt === 'Easy' || filt === 'Medium' || filt === 'Hard') return p.d === filt;
           return true;
         });
-      if (!probs.length && query) return;
+      if (!probs.length) return;
       any = true;
 
       const sD = s.p.filter((_, i) => doneSet.has(key(s.id, i))).length;
@@ -99,6 +115,7 @@ export default function SheetTab({ sheetDone, toggleSheet, openSections, toggleS
                 probs.map((p) => {
                   const k = key(s.id, p._i);
                   const isDone = doneSet.has(k);
+                  const isSaved = savedSet.has(k);
                   const url = leetCodeProblemUrl(p.num, p.n);
                   return (
                     <div key={k} className="pr">
@@ -140,6 +157,15 @@ export default function SheetTab({ sheetDone, toggleSheet, openSections, toggleS
                         </svg>
                         Practice
                       </a>
+                      <button
+                        type="button"
+                        className={`save-btn${isSaved ? ' saved' : ''}`}
+                        onClick={() => toggleSheetSaved(s.id, p._i)}
+                        aria-label={isSaved ? 'Remove from saved problems' : 'Save problem'}
+                        title={isSaved ? 'Saved' : 'Save'}
+                      >
+                        <StarIcon filled={isSaved} />
+                      </button>
                     </div>
                   );
                 })
@@ -151,7 +177,7 @@ export default function SheetTab({ sheetDone, toggleSheet, openSections, toggleS
     });
 
     return { nodes: out, any };
-  }, [q, filt, doneSet, openSections, toggleSheet, toggleSec]);
+  }, [q, filt, doneSet, savedSet, openSections, toggleSheet, toggleSheetSaved, toggleSec]);
 
   const st = stats;
 
@@ -247,6 +273,9 @@ export default function SheetTab({ sheetDone, toggleSheet, openSections, toggleS
         </button>
         <button type="button" className={`pill${filt === 'done' ? ' on' : ''}`} onClick={() => sf('done')}>
           ✓ Done
+        </button>
+        <button type="button" className={`pill${filt === 'saved' ? ' on' : ''}`} onClick={() => sf('saved')}>
+          ★ Saved
         </button>
         <button type="button" className={`pill${filt === 'todo' ? ' on' : ''}`} onClick={() => sf('todo')}>
           To Do

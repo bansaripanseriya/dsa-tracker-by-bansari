@@ -8,6 +8,8 @@ function normalize(p) {
   return {
     sheetDone: Array.isArray(p?.sheetDone) ? [...p.sheetDone] : [],
     practiceDone: Array.isArray(p?.practiceDone) ? [...p.practiceDone] : [],
+    sheetSaved: Array.isArray(p?.sheetSaved) ? [...p.sheetSaved] : [],
+    practiceSaved: Array.isArray(p?.practiceSaved) ? [...p.practiceSaved] : [],
     streak,
     openSections: Array.isArray(p?.openSections) ? [...p.openSections] : [1, 2, 3]
   };
@@ -51,6 +53,8 @@ export function applyPendingToggle(merged, pending) {
     ...merged,
     sheetDone: [...(merged.sheetDone || [])],
     practiceDone: [...(merged.practiceDone || [])],
+    sheetSaved: [...(merged.sheetSaved || [])],
+    practiceSaved: [...(merged.practiceSaved || [])],
     streak: { checkins: [...(merged.streak?.checkins || [])] }
   };
   if (pending.type === 'sheet') {
@@ -61,6 +65,14 @@ export function applyPendingToggle(merged, pending) {
     next.sheetDone = [...s];
     return next;
   }
+  if (pending.type === 'sheetSaved') {
+    const k = `${pending.sid}_${pending.pi}`;
+    const s = new Set(next.sheetSaved);
+    if (s.has(k)) s.delete(k);
+    else s.add(k);
+    next.sheetSaved = [...s];
+    return next;
+  }
   if (pending.type === 'practice') {
     const k = `p${pending.day}_${pending.pi}`;
     const s = new Set(next.practiceDone);
@@ -69,6 +81,14 @@ export function applyPendingToggle(merged, pending) {
     next.practiceDone = [...s];
     const nowDone = s.has(k);
     next.sheetDone = syncSheetDoneForPractice(next.sheetDone, pending.day, pending.pi, nowDone);
+    return next;
+  }
+  if (pending.type === 'practiceSaved') {
+    const k = `p${pending.day}_${pending.pi}`;
+    const s = new Set(next.practiceSaved);
+    if (s.has(k)) s.delete(k);
+    else s.add(k);
+    next.practiceSaved = [...s];
     return next;
   }
   if (pending.type === 'checkin') {
@@ -96,6 +116,8 @@ export function mergeWithServerProgress(local, server) {
   return {
     sheetDone: unionStrings(local.sheetDone, s.sheetDone).sort(),
     practiceDone: unionStrings(local.practiceDone, s.practiceDone).sort(),
+    sheetSaved: unionStrings(local.sheetSaved, s.sheetSaved).sort(),
+    practiceSaved: unionStrings(local.practiceSaved, s.practiceSaved).sort(),
     streak: { checkins: unionStrings(streakIn(local.streak), streakIn(s.streak)).sort() },
     openSections: open.length ? open : [1, 2, 3]
   };
@@ -110,6 +132,8 @@ export async function mergeGuestProgressAfterAuth(apiClient, setProgress) {
   const { data: saved } = await apiClient.put('/progress', {
     sheetDone: merged.sheetDone,
     practiceDone: merged.practiceDone,
+    sheetSaved: merged.sheetSaved,
+    practiceSaved: merged.practiceSaved,
     streak: { checkins: merged.streak.checkins || [] },
     openSections: merged.openSections
   });

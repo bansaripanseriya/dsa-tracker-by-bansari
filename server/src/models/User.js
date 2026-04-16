@@ -4,6 +4,8 @@ const progressSchema = new mongoose.Schema(
   {
     sheetDone: { type: [String], default: [] },
     practiceDone: { type: [String], default: [] },
+    sheetSaved: { type: [String], default: [] },
+    practiceSaved: { type: [String], default: [] },
     streak: {
       checkins: { type: [String], default: [] }
     },
