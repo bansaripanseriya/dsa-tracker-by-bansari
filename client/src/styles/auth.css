@@ -381,7 +381,7 @@ button.day-head {
 .auth-sub,
 .modal-sub,
 .auth-footer {
-  font-family: "Segoe Print", "Comic Sans MS", cursive;
+  font-family: 'Outfit', sans-serif;
 }
 
 .auth-card input,
@@ -430,7 +430,7 @@ button.day-head {
 .modal-panel input,
 .modal-panel .auth-submit,
 .modal-close {
-  font-family: "Segoe Print", "Comic Sans MS", cursive;
+  font-family: 'Outfit', sans-serif;
 }
 
 .modal-panel h2 {
