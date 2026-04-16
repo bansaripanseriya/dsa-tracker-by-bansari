@@ -1,4 +1,5 @@
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import express from 'express';
@@ -41,12 +42,22 @@ app.use('/api/auth', authRoutes);
 app.use('/api/progress', progressRoutes);
 
 if (process.env.NODE_ENV === 'production') {
-  const dist = path.join(__dirname, '../../client/dist');
-  app.use(express.static(dist));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) return next();
-    res.sendFile(path.join(dist, 'index.html'));
-  });
+  const distCandidates = [
+    path.resolve(__dirname, '../../../client/dist'),
+    path.resolve(process.cwd(), '../client/dist'),
+    path.resolve(process.cwd(), 'client/dist')
+  ];
+  const dist = distCandidates.find((candidate) => fs.existsSync(path.join(candidate, 'index.html')));
+
+  if (dist) {
+    app.use(express.static(dist));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) return next();
+      res.sendFile(path.join(dist, 'index.html'));
+    });
+  } else {
+    console.warn('[static] client/dist not found; skipping static file serving');
+  }
 }
 
 async function main() {
