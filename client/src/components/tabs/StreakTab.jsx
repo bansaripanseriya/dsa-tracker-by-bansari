@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import api from '../../api/client';
 import {
   buildLearningTimeChart,
   buildYearHeatmap,
@@ -317,14 +318,64 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
   const [notesBoardOpen, setNotesBoardOpen] = useState(false);
   const [notesSearch, setNotesSearch] = useState('');
   const [activeNoteId, setActiveNoteId] = useState(null);
+  const [notesLoaded, setNotesLoaded] = useState(!authenticated);
 
   useEffect(() => {
+    if (authenticated) return;
     try {
       localStorage.setItem(notesStorageKey, JSON.stringify(notes));
     } catch {
       /* ignore storage write issues */
     }
-  }, [notesStorageKey, notes]);
+  }, [authenticated, notesStorageKey, notes]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNotes() {
+      if (!authenticated) {
+        try {
+          const raw = localStorage.getItem(notesStorageKey);
+          const parsed = raw ? JSON.parse(raw) : [];
+          if (!cancelled) {
+            setNotes(Array.isArray(parsed) ? parsed : []);
+          }
+        } catch {
+          if (!cancelled) {
+            setNotes([]);
+          }
+        }
+        setNotesLoaded(true);
+        return;
+      }
+      try {
+        const { data } = await api.get('/auth/notes');
+        if (!cancelled) {
+          setNotes(Array.isArray(data.notes) ? data.notes : []);
+          setNotesLoaded(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setNotes([]);
+          setNotesLoaded(true);
+        }
+      }
+    }
+
+    setNotesLoaded(!authenticated ? true : false);
+    loadNotes();
+    return () => {
+      cancelled = true;
+    };
+  }, [authenticated, notesStorageKey]);
+
+  useEffect(() => {
+    if (!authenticated || !notesLoaded) return;
+    const timeout = setTimeout(() => {
+      api.put('/auth/notes', { notes }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [authenticated, notesLoaded, notes]);
 
   function openNotesPopup() {
     setNoteTitle('');

@@ -325,4 +325,62 @@ router.put(
   }
 );
 
+router.get('/notes', authRequired, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.sub).select('notes');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    return res.json({ notes: Array.isArray(user.notes) ? user.notes : [] });
+  } catch (error) {
+    console.error('GET /api/auth/notes failed:', error);
+    return res.status(500).json({ error: 'Failed to fetch notes' });
+  }
+});
+
+router.put(
+  '/notes',
+  [
+    body('notes').isArray(),
+    body('notes.*.id').isString().trim().isLength({ min: 1, max: 80 }),
+    body('notes.*.title').optional().isString().trim().isLength({ max: 200 }),
+    body('notes.*.body').optional().isString().isLength({ max: 20000 }),
+    body('notes.*.lang').optional().isString().trim().isLength({ max: 80 }),
+    body('notes.*.priority').optional().isString().trim().isLength({ max: 30 }),
+    body('notes.*.createdAt').isString().trim().notEmpty(),
+    body('notes.*.prettyTime').optional().isString().trim().isLength({ max: 120 })
+  ],
+  authRequired,
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const user = await User.findById(req.user.sub);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      user.notes = req.body.notes.map((note) => ({
+        id: note.id,
+        title: note.title || 'Untitled',
+        body: note.body || '',
+        lang: note.lang || 'JavaScript',
+        priority: note.priority || 'Low',
+        createdAt: note.createdAt,
+        prettyTime: note.prettyTime || ''
+      }));
+      user.markModified('notes');
+      await user.save();
+
+      return res.json({ notes: user.notes || [] });
+    } catch (error) {
+      console.error('PUT /api/auth/notes failed:', error);
+      return res.status(500).json({ error: 'Failed to save notes' });
+    }
+  }
+);
+
 export default router;

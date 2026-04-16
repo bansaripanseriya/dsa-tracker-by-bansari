@@ -34,6 +34,19 @@ const avatarSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const noteSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true, trim: true, maxlength: 80 },
+    title: { type: String, trim: true, maxlength: 200, default: 'Untitled' },
+    body: { type: String, trim: true, maxlength: 20000, default: '' },
+    lang: { type: String, trim: true, maxlength: 80, default: 'JavaScript' },
+    priority: { type: String, trim: true, maxlength: 30, default: 'Low' },
+    createdAt: { type: String, required: true },
+    prettyTime: { type: String, trim: true, maxlength: 120, default: '' }
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     email: {
@@ -50,7 +63,8 @@ const userSchema = new mongoose.Schema(
     passwordResetExpires: { type: Date, default: null },
     progress: { type: progressSchema, default: () => ({}) },
     resume: { type: resumeSchema, default: null },
-    avatar: { type: avatarSchema, default: () => ({ presetIndex: 0 }) }
+    avatar: { type: avatarSchema, default: () => ({ presetIndex: 0 }) },
+    notes: { type: [noteSchema], default: [] }
   },
   { timestamps: true }
 );
