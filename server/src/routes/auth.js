@@ -179,7 +179,7 @@ router.get('/me', authRequired, async (req, res) => {
   try {
     const user = await User.findById(req.user.sub).select('email name progress');
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(401).json({ error: 'Invalid session. Please log in again.' });
     }
     res.json({
       user: { id: user._id, email: user.email, name: user.name },
