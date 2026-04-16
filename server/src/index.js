@@ -14,6 +14,7 @@ dotenv.config({ path: envPath });
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
+const HOST = process.env.HOST || '0.0.0.0';
 
 const clientOrigins = (
   process.env.CLIENT_URL ||
@@ -49,10 +50,16 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 async function main() {
-  await connectDb();
-  app.listen(PORT, () => {
-    console.log(`API listening on http://localhost:${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`API listening on http://${HOST}:${PORT}`);
   });
+
+  try {
+    await connectDb();
+    console.log('Database connected');
+  } catch (e) {
+    console.error('Database connection failed:', e);
+  }
 }
 
 main().catch((e) => {
