@@ -191,6 +191,42 @@
   outline: none;
 }
 
+.profile-skills-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.profile-skills-row .profile-skill-input {
+  flex: 1;
+}
+
+.profile-skills-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.profile-skill-chip {
+  border: 2px solid rgba(56, 49, 42, 0.28);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.profile-skill-chip strong {
+  font-size: 16px;
+  line-height: 1;
+}
+
 .profile-upload-row {
   display: flex;
   gap: 10px;
@@ -234,6 +270,20 @@
   font-size: 14px;
   font-family: 'Outfit', sans-serif;
   cursor: pointer;
+}
+
+.profile-btn:focus-visible,
+.profile-skill-chip:focus-visible,
+.profile-upload-row input[type='file']::file-selector-button:focus-visible {
+  outline: 3px solid rgba(255, 107, 53, 0.28);
+  outline-offset: 2px;
+}
+
+.profile-btn:active,
+.profile-skill-chip:active,
+.profile-upload-row input[type='file']::file-selector-button:active {
+  transform: translateY(1px) scale(0.98);
+  filter: brightness(0.97);
 }
 
 .profile-btn.secondary {
@@ -543,6 +593,12 @@ html[data-theme='dark'] .profile-skill-input {
   background: rgba(36, 31, 25, 0.92);
   border-color: rgba(232, 220, 197, 0.22);
   color: var(--ink);
+}
+
+html[data-theme='dark'] .profile-skill-chip {
+  background: rgba(38, 33, 27, 0.92);
+  border-color: rgba(232, 220, 197, 0.2);
+  color: #f5ecdb;
 }
 
 html[data-theme='dark'] .profile-upload-row input[type='file'] {

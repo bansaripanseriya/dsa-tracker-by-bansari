@@ -47,6 +47,13 @@ const noteSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const skillSchema = new mongoose.Schema(
+  {
+    name: { type: String, trim: true, maxlength: 80, required: true }
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     email: {
@@ -64,7 +71,8 @@ const userSchema = new mongoose.Schema(
     progress: { type: progressSchema, default: () => ({}) },
     resume: { type: resumeSchema, default: null },
     avatar: { type: avatarSchema, default: () => ({ presetIndex: 0 }) },
-    notes: { type: [noteSchema], default: [] }
+    notes: { type: [noteSchema], default: [] },
+    skills: { type: [skillSchema], default: [] }
   },
   { timestamps: true }
 );

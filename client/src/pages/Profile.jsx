@@ -48,6 +48,10 @@ export default function Profile() {
   const [resumeFile, setResumeFile] = useState(null);
   const [resumeSaved, setResumeSaved] = useState(null);
   const [resumeError, setResumeError] = useState('');
+  const [skillOptions, setSkillOptions] = useState([]);
+  const [selectedSkill, setSelectedSkill] = useState('');
+  const [savedSkills, setSavedSkills] = useState([]);
+  const [skillsError, setSkillsError] = useState('');
 
   const displayName = useMemo(() => {
     if (!user) return 'Guest User';
@@ -83,6 +87,30 @@ export default function Profile() {
     }
 
     loadResume();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSkills() {
+      try {
+        const [{ data: optionsData }, { data: meData }] = await Promise.all([api.get('/auth/skills-options'), api.get('/auth/me')]);
+        if (!cancelled) {
+          setSkillOptions(Array.isArray(optionsData.skills) ? optionsData.skills : []);
+          setSavedSkills(Array.isArray(meData.skills) ? meData.skills : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setSkillOptions([]);
+          setSavedSkills([]);
+        }
+      }
+    }
+
+    loadSkills();
     return () => {
       cancelled = true;
     };
@@ -183,6 +211,35 @@ export default function Profile() {
       setResumeError('Could not read that file. Try again.');
     };
     reader.readAsDataURL(resumeFile);
+  }
+
+  async function saveSkills(nextSkills) {
+    try {
+      const { data } = await api.put('/auth/skills', { skills: nextSkills });
+      setSavedSkills(Array.isArray(data.skills) ? data.skills : []);
+      setSkillsError('');
+    } catch (error) {
+      setSkillsError(error?.response?.data?.error || 'Could not save skills. Please try again.');
+    }
+  }
+
+  function handleAddSkill() {
+    const next = selectedSkill.trim();
+    if (!next) {
+      setSkillsError('Please select a skill first.');
+      return;
+    }
+    if (savedSkills.includes(next)) {
+      setSkillsError('That skill is already added.');
+      return;
+    }
+    const nextSkills = [...savedSkills, next];
+    setSelectedSkill('');
+    saveSkills(nextSkills);
+  }
+
+  function handleRemoveSkill(skillToRemove) {
+    saveSkills(savedSkills.filter((skill) => skill !== skillToRemove));
   }
 
   return (
@@ -455,7 +512,34 @@ export default function Profile() {
                 </SectionCard>
 
                 <SectionCard id="skills" title="Skills" subtitle="Please add your skills">
-                  <input className="profile-skill-input" placeholder="Add a skill..." />
+                  <div className="profile-skills-row">
+                    <select className="profile-skill-input" value={selectedSkill} onChange={(e) => setSelectedSkill(e.target.value)}>
+                      <option value="">Select a skill...</option>
+                      {skillOptions
+                        .filter((skill) => !savedSkills.includes(skill))
+                        .map((skill) => (
+                          <option key={skill} value={skill}>
+                            {skill}
+                          </option>
+                        ))}
+                    </select>
+                    <button type="button" className="profile-btn primary" onClick={handleAddSkill}>
+                      Add Skill
+                    </button>
+                  </div>
+                  {skillsError ? <p className="profile-upload-error">{skillsError}</p> : null}
+                  <div className="profile-skills-list">
+                    {savedSkills.length ? (
+                      savedSkills.map((skill) => (
+                        <button key={skill} type="button" className="profile-skill-chip" onClick={() => handleRemoveSkill(skill)}>
+                          <span>{skill}</span>
+                          <strong>×</strong>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="profile-upload-hint">No skills added yet.</p>
+                    )}
+                  </div>
                 </SectionCard>
 
                 <div className="profile-actions">

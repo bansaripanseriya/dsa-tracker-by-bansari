@@ -11,6 +11,70 @@ const router = Router();
 
 const RESET_TOKEN_BYTES = 32;
 const RESET_EXPIRY_MS = 60 * 60 * 1000;
+const SKILL_OPTIONS = [
+  'C',
+  'C++',
+  'C#',
+  'Java',
+  'Python',
+  'JavaScript',
+  'TypeScript',
+  'Go',
+  'Rust',
+  'Kotlin',
+  'Swift',
+  'PHP',
+  'Ruby',
+  'Scala',
+  'R',
+  'HTML',
+  'CSS',
+  'React',
+  'Next.js',
+  'Vue.js',
+  'Angular',
+  'Node.js',
+  'Express.js',
+  'Django',
+  'Flask',
+  'Spring Boot',
+  'Laravel',
+  'Tailwind CSS',
+  'Bootstrap',
+  'MongoDB',
+  'MySQL',
+  'PostgreSQL',
+  'SQLite',
+  'Redis',
+  'Firebase',
+  'Supabase',
+  'AWS',
+  'Azure',
+  'Google Cloud',
+  'Docker',
+  'Kubernetes',
+  'Git',
+  'GitHub',
+  'CI/CD',
+  'REST API',
+  'GraphQL',
+  'Data Structures',
+  'Algorithms',
+  'Problem Solving',
+  'Machine Learning',
+  'Deep Learning',
+  'NLP',
+  'Computer Vision',
+  'Data Analysis',
+  'Pandas',
+  'NumPy',
+  'TensorFlow',
+  'PyTorch',
+  'Power BI',
+  'Tableau',
+  'Figma',
+  'UI/UX Design'
+];
 
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -177,7 +241,7 @@ router.post(
 
 router.get('/me', authRequired, async (req, res) => {
   try {
-    const user = await User.findById(req.user.sub).select('email name progress resume avatar');
+    const user = await User.findById(req.user.sub).select('email name progress resume avatar skills');
     if (!user) {
       return res.status(401).json({ error: 'Invalid session. Please log in again.' });
     }
@@ -200,12 +264,17 @@ router.get('/me', authRequired, async (req, res) => {
             type: user.resume.type,
             uploadedAt: user.resume.uploadedAt
           }
-        : null
+        : null,
+      skills: Array.isArray(user.skills) ? user.skills.map((skill) => skill.name).filter(Boolean) : []
     });
   } catch (error) {
     console.error('GET /api/auth/me failed:', error);
     return res.status(500).json({ error: 'Failed to fetch current user' });
   }
+});
+
+router.get('/skills-options', authRequired, async (_req, res) => {
+  return res.json({ skills: SKILL_OPTIONS });
 });
 
 router.get('/resume', authRequired, async (req, res) => {
@@ -337,6 +406,37 @@ router.get('/notes', authRequired, async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch notes' });
   }
 });
+
+router.put(
+  '/skills',
+  [
+    body('skills').isArray({ max: 50 }),
+    body('skills.*').isString().trim().isLength({ min: 1, max: 80 })
+  ],
+  authRequired,
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const user = await User.findById(req.user.sub);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const uniqueSkills = [...new Set(req.body.skills.map((skill) => skill.trim()).filter(Boolean))].slice(0, 50);
+      user.skills = uniqueSkills.map((name) => ({ name }));
+      await user.save();
+
+      return res.json({ skills: user.skills.map((skill) => skill.name) });
+    } catch (error) {
+      console.error('PUT /api/auth/skills failed:', error);
+      return res.status(500).json({ error: 'Failed to save skills' });
+    }
+  }
+);
 
 router.put(
   '/notes',

@@ -205,6 +205,18 @@
   color: var(--text);
 }
 
+.auth-submit:focus-visible,
+.hdr-logout:focus-visible {
+  outline: 3px solid rgba(255, 107, 53, 0.28);
+  outline-offset: 2px;
+}
+
+.auth-submit:active:not(:disabled),
+.hdr-logout:active:not(:disabled) {
+  transform: translateY(1px) scale(0.98);
+  filter: brightness(0.97);
+}
+
 html[data-theme='light'] .auth-error {
   color: #991b1b;
   background: rgba(239, 68, 68, 0.1);
