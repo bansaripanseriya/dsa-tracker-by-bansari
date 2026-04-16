@@ -153,7 +153,9 @@
 }
 
 .auth-submit:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: rgba(15, 118, 110, 0.22);
+  color: #0f4f4b;
+  filter: none;
 }
 
 .auth-submit:disabled {
@@ -213,6 +215,11 @@ html[data-theme='light'] .auth-info {
   color: #065f46;
   background: rgba(16, 185, 129, 0.1);
   border-color: rgba(5, 150, 105, 0.35);
+}
+
+html[data-theme='dark'] .auth-submit:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.26);
+  color: #d1fae5;
 }
 
 button.sec-hd {
@@ -489,3 +496,8 @@ button.day-head {
 .auth-card input { font-size: 18px; padding: 12px 14px; }
 .auth-submit { font-size: 20px; padding: 14px; }
 .auth-footer { font-size: 18px; }
+
+html[data-layout='classic'] .auth-page,
+html[data-layout='classic'] .auth-page * {
+  font-family: 'Outfit', sans-serif !important;
+}

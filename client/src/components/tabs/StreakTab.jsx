@@ -436,7 +436,7 @@ export default function StreakTab({ streak, doCheckin, authenticated = true, she
         <div className="dash-card dash-welcome-card dash-welcome-modern">
           <div className="dash-welcome-main">
             <p className="dash-kicker">Dashboard</p>
-            <h2 className="dash-welcome-title">Hi, {firstName || 'Coder'}</h2>
+            <h2 className="dash-welcome-title">Hi, {firstName || 'Coder'}...!!</h2>
             <p className="dash-welcome-sub">
               {authenticated
                 ? 'Discover courses, track progress, and achieve your learning goals seamlessly.'

@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState } from 'react';
 
-const STORAGE_KEY = 'dsa-theme';
+const THEME_STORAGE_KEY = 'dsa-theme';
+const LAYOUT_STORAGE_KEY = 'dsa-layout';
 
 const ThemeContext = createContext(null);
 
 function readStoredTheme() {
   try {
-    const s = localStorage.getItem(STORAGE_KEY);
+    const s = localStorage.getItem(THEME_STORAGE_KEY);
     if (s === 'light' || s === 'dark') return s;
   } catch {
     /* ignore */
@@ -14,23 +15,43 @@ function readStoredTheme() {
   return 'dark';
 }
 
+function readStoredLayout() {
+  try {
+    const s = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (s === 'classic' || s === 'doodle') return s;
+  } catch {
+    /* ignore */
+  }
+  return 'doodle';
+}
+
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(readStoredTheme);
+  const [layout, setLayout] = useState(readStoredLayout);
 
   useLayoutEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-layout', layout);
     try {
-      localStorage.setItem(STORAGE_KEY, theme);
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+      localStorage.setItem(LAYOUT_STORAGE_KEY, layout);
     } catch {
       /* ignore */
     }
-  }, [theme]);
+  }, [theme, layout]);
 
   const toggleTheme = useCallback(() => {
     setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
   }, []);
 
-  const value = useMemo(() => ({ theme, setTheme, toggleTheme }), [theme, toggleTheme]);
+  const toggleLayout = useCallback(() => {
+    setLayout((l) => (l === 'doodle' ? 'classic' : 'doodle'));
+  }, []);
+
+  const value = useMemo(
+    () => ({ theme, setTheme, toggleTheme, layout, setLayout, toggleLayout }),
+    [layout, theme, toggleLayout, toggleTheme]
+  );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

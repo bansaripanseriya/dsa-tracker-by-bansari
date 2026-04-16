@@ -90,7 +90,7 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  font-size: 13px;
+  font-size: 18px;
   color: var(--ink-soft);
   margin: 4px 0 8px;
 }
@@ -98,6 +98,14 @@
 .profile-breadcrumb a {
   color: var(--marker);
   text-decoration: none;
+}
+
+@media (max-width: 680px) {
+  .profile-breadcrumb {
+    font-size: 16px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
 }
 
 .profile-panel {
@@ -121,6 +129,11 @@
   font-size: 14px;
   font-family: 'Outfit', sans-serif;
   cursor: pointer;
+}
+
+.profile-tab-btn:hover {
+  background: rgba(56, 49, 42, 0.12);
+  color: var(--ink);
 }
 
 .profile-tab-btn.active {
@@ -184,6 +197,30 @@
   align-items: center;
 }
 
+.profile-upload-row input[type='file'] {
+  flex: 1;
+  min-width: 0;
+  font-family: 'Outfit', sans-serif;
+  font-size: 16px;
+  color: var(--ink-soft);
+}
+
+.profile-upload-row input[type='file']::file-selector-button {
+  margin-right: 12px;
+  border: 2px solid rgba(56, 49, 42, 0.55);
+  border-radius: 10px 14px 9px 12px;
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--ink);
+  padding: 9px 14px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.profile-upload-row input[type='file']::file-selector-button:hover {
+  background: rgba(56, 49, 42, 0.12);
+}
+
 .profile-actions {
   display: flex;
   justify-content: flex-end;
@@ -205,11 +242,21 @@
   color: var(--ink-soft);
 }
 
+.profile-btn.secondary:hover {
+  background: rgba(56, 49, 42, 0.12);
+  color: var(--ink);
+}
+
 .profile-btn.primary {
   border: 2px solid rgba(15, 118, 110, 0.72);
   background: rgba(16, 185, 129, 0.17);
   color: #0f4f4b;
   font-weight: 700;
+}
+
+.profile-btn.primary:hover {
+  background: rgba(15, 118, 110, 0.22);
+  color: #0f4f4b;
 }
 
 .profile-sec-head {
@@ -234,6 +281,10 @@
   margin-top: 10px;
 }
 
+.profile-anchor-block {
+  scroll-margin-top: 90px;
+}
+
 .profile-pref-row {
   display: flex;
   flex-wrap: wrap;
@@ -245,7 +296,7 @@
   align-items: center;
   gap: 8px;
   font-family: 'Outfit', sans-serif;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--ink);
   cursor: pointer;
 }
@@ -255,8 +306,8 @@
 }
 
 .profile-toggle .slider {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border-radius: 2px;
   border: 2px solid #4b5563;
   background: #ffffff;
@@ -267,8 +318,8 @@
 
 .profile-toggle .slider::after {
   content: '';
-  width: 10px;
-  height: 6px;
+  width: 12px;
+  height: 7px;
   border: 2px solid transparent;
   border-left-color: #1f2937;
   border-bottom-color: #1f2937;
@@ -324,7 +375,7 @@
   align-items: center;
   justify-content: center;
   color: #3b82f6;
-  font-size: 12px;
+  font-size: 17px;
   font-family: 'Outfit', sans-serif;
   background: rgba(255, 255, 255, 0.6);
   cursor: pointer;
@@ -337,6 +388,19 @@
 .profile-avatar-label {
   text-align: center;
   margin: 10px 0 8px;
+  font-size: 18px;
+}
+
+.profile-upload-error {
+  margin: 8px 0 0;
+  color: #dc2626;
+  font-size: 15px;
+}
+
+.profile-upload-hint {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
 }
 
 .profile-avatar-list {
@@ -394,6 +458,23 @@
     flex-direction: column;
     align-items: stretch;
   }
+
+  .profile-dropzone {
+    font-size: 15px;
+  }
+
+  .profile-avatar-label {
+    font-size: 16px;
+  }
+
+  .profile-toggle {
+    font-size: 16px;
+  }
+
+  .profile-toggle .slider {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 html[data-theme='dark'] .profile-sidebar,
@@ -423,6 +504,10 @@ html[data-theme='dark'] .profile-avatar-label {
   color: var(--ink-soft);
 }
 
+html[data-theme='dark'] .profile-upload-error {
+  color: #fca5a5;
+}
+
 html[data-theme='dark'] .profile-side-link:hover {
   background: rgba(52, 211, 153, 0.16);
   color: #34d399;
@@ -442,6 +527,10 @@ html[data-theme='dark'] .profile-tab-btn {
   color: var(--ink);
 }
 
+html[data-theme='dark'] .profile-tab-btn:hover {
+  background: rgba(232, 220, 197, 0.14);
+}
+
 html[data-theme='dark'] .profile-tab-btn.active {
   background: rgba(52, 211, 153, 0.18);
   border-color: rgba(52, 211, 153, 0.72);
@@ -454,6 +543,20 @@ html[data-theme='dark'] .profile-skill-input {
   background: rgba(36, 31, 25, 0.92);
   border-color: rgba(232, 220, 197, 0.22);
   color: var(--ink);
+}
+
+html[data-theme='dark'] .profile-upload-row input[type='file'] {
+  color: var(--ink-soft);
+}
+
+html[data-theme='dark'] .profile-upload-row input[type='file']::file-selector-button {
+  background: rgba(42, 35, 28, 0.9);
+  border-color: rgba(232, 220, 197, 0.45);
+  color: var(--ink);
+}
+
+html[data-theme='dark'] .profile-upload-row input[type='file']::file-selector-button:hover {
+  background: rgba(232, 220, 197, 0.14);
 }
 
 html[data-theme='dark'] .profile-form-grid input::placeholder,
@@ -472,9 +575,19 @@ html[data-theme='dark'] .profile-btn.secondary {
   color: var(--ink-soft);
 }
 
+html[data-theme='dark'] .profile-btn.secondary:hover {
+  background: rgba(232, 220, 197, 0.14);
+  color: var(--ink);
+}
+
 html[data-theme='dark'] .profile-btn.primary {
   background: rgba(52, 211, 153, 0.18);
   border-color: rgba(52, 211, 153, 0.72);
+  color: #d1fae5;
+}
+
+html[data-theme='dark'] .profile-btn.primary:hover {
+  background: rgba(52, 211, 153, 0.26);
   color: #d1fae5;
 }
 
@@ -526,3 +639,8 @@ html[data-theme='dark'] .profile-avatar-chip.active {
 .profile-form-grid textarea,
 .profile-skill-input { font-size: 17px; padding: 12px 14px; }
 .profile-btn { font-size: 17px; padding: 11px 18px; }
+
+html[data-layout='classic'] .profile-page,
+html[data-layout='classic'] .profile-page * {
+  font-family: 'Outfit', sans-serif !important;
+}

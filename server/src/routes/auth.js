@@ -177,18 +177,152 @@ router.post(
 
 router.get('/me', authRequired, async (req, res) => {
   try {
-    const user = await User.findById(req.user.sub).select('email name progress');
+    const user = await User.findById(req.user.sub).select('email name progress resume avatar');
     if (!user) {
       return res.status(401).json({ error: 'Invalid session. Please log in again.' });
     }
     res.json({
       user: { id: user._id, email: user.email, name: user.name },
-      progress: user.progress || {}
+      progress: user.progress || {},
+      avatar: user.avatar
+        ? {
+            presetIndex: user.avatar.presetIndex || 0,
+            data: user.avatar.data || '',
+            type: user.avatar.type || '',
+            size: user.avatar.size || 0,
+            uploadedAt: user.avatar.uploadedAt || null
+          }
+        : { presetIndex: 0, data: '', type: '', size: 0, uploadedAt: null },
+      resume: user.resume
+        ? {
+            name: user.resume.name,
+            size: user.resume.size,
+            type: user.resume.type,
+            uploadedAt: user.resume.uploadedAt
+          }
+        : null
     });
   } catch (error) {
     console.error('GET /api/auth/me failed:', error);
     return res.status(500).json({ error: 'Failed to fetch current user' });
   }
 });
+
+router.get('/resume', authRequired, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.sub).select('resume');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    return res.json({
+      resume: user.resume
+        ? {
+            name: user.resume.name,
+            size: user.resume.size,
+            type: user.resume.type,
+            uploadedAt: user.resume.uploadedAt,
+            data: user.resume.data
+          }
+        : null
+    });
+  } catch (error) {
+    console.error('GET /api/auth/resume failed:', error);
+    return res.status(500).json({ error: 'Failed to fetch resume' });
+  }
+});
+
+router.put(
+  '/resume',
+  [
+    body('name').trim().notEmpty().isLength({ max: 255 }),
+    body('size').isInt({ min: 1, max: 5 * 1024 * 1024 }),
+    body('type').trim().notEmpty().isLength({ max: 120 }),
+    body('data').trim().notEmpty().isLength({ max: 8_000_000 })
+  ],
+  authRequired,
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const user = await User.findById(req.user.sub);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const { name, size, type, data } = req.body;
+      user.resume = {
+        name,
+        size,
+        type,
+        data,
+        uploadedAt: new Date()
+      };
+      await user.save();
+
+      return res.json({
+        resume: {
+          name: user.resume.name,
+          size: user.resume.size,
+          type: user.resume.type,
+          uploadedAt: user.resume.uploadedAt
+        }
+      });
+    } catch (error) {
+      console.error('PUT /api/auth/resume failed:', error);
+      return res.status(500).json({ error: 'Failed to save resume' });
+    }
+  }
+);
+
+router.put(
+  '/avatar',
+  [
+    body('presetIndex').optional().isInt({ min: 0, max: 50 }),
+    body('data').optional().isString().isLength({ max: 4_000_000 }),
+    body('type').optional().isString().isLength({ max: 120 }),
+    body('size').optional().isInt({ min: 0, max: 2 * 1024 * 1024 })
+  ],
+  authRequired,
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const user = await User.findById(req.user.sub);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const { presetIndex, data = '', type = '', size = 0 } = req.body;
+      const nextPresetIndex = Number.isInteger(presetIndex) ? presetIndex : user.avatar?.presetIndex || 0;
+      user.avatar = {
+        presetIndex: nextPresetIndex,
+        data,
+        type,
+        size,
+        uploadedAt: data ? new Date() : null
+      };
+      await user.save();
+
+      return res.json({
+        avatar: {
+          presetIndex: user.avatar.presetIndex || 0,
+          data: user.avatar.data || '',
+          type: user.avatar.type || '',
+          size: user.avatar.size || 0,
+          uploadedAt: user.avatar.uploadedAt || null
+        }
+      });
+    } catch (error) {
+      console.error('PUT /api/auth/avatar failed:', error);
+      return res.status(500).json({ error: 'Failed to save avatar' });
+    }
+  }
+);
 
 export default router;

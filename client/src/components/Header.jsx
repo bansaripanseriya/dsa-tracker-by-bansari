@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
+import LayoutToggle from './LayoutToggle';
 import { calcStreak, countCheckinsCurrentWeek } from '../utils/streak';
 
 function ChevronDown({ className = '' }) {
@@ -100,11 +101,6 @@ const AVATAR_IMAGES = Object.entries(
 
 export default function Header({ note, activeTab, onTabChange, streak, showNav = false }) {
   const showMainNav = typeof onTabChange === 'function' || showNav;
-  const [selectedAvatarIndex, setSelectedAvatarIndex] = useState(() => {
-    const saved = Number(localStorage.getItem('profileAvatarIndex'));
-    return Number.isInteger(saved) && saved >= 0 ? saved : 0;
-  });
-
   function handleTabNavigation(nextTab) {
     if (typeof onTabChange === 'function') {
       onTabChange(nextTab);
@@ -113,15 +109,17 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
     navigate(`/?tab=${nextTab}`);
   }
 
-  const { user, logout } = useAuth();
+  const { user, avatar, logout } = useAuth();
   const navigate = useNavigate();
   const [streakOpen, setStreakOpen] = useState(false);
   const [isMobileView, setIsMobileView] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 768 : false));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileHeaderHidden, setMobileHeaderHidden] = useState(false);
+  const [quickPanel, setQuickPanel] = useState(null);
   const streakRef = useRef(null);
   const profileRef = useRef(null);
   const mobileMenuRef = useRef(null);
+  const quickPanelRef = useRef(null);
   const lastScrollYRef = useRef(0);
 
   const weekCount = useMemo(() => countCheckinsCurrentWeek(streak?.checkins), [streak?.checkins]);
@@ -155,23 +153,7 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
 
   const weekFrac = Math.min(1, weekCount / 7);
   const streakFrac = streakStats.best > 0 ? Math.min(1, streakStats.current / streakStats.best) : 0;
-  const selectedAvatarSrc = AVATAR_IMAGES[selectedAvatarIndex] || '';
-
-  useEffect(() => {
-    function readAvatarSelection() {
-      const saved = Number(localStorage.getItem('profileAvatarIndex'));
-      if (!Number.isInteger(saved)) return;
-      const safeIndex = Math.max(0, Math.min(saved, Math.max(0, AVATAR_IMAGES.length - 1)));
-      setSelectedAvatarIndex(safeIndex);
-    }
-
-    window.addEventListener('profile-avatar-updated', readAvatarSelection);
-    window.addEventListener('storage', readAvatarSelection);
-    return () => {
-      window.removeEventListener('profile-avatar-updated', readAvatarSelection);
-      window.removeEventListener('storage', readAvatarSelection);
-    };
-  }, []);
+  const selectedAvatarSrc = avatar?.data || AVATAR_IMAGES[Math.max(0, Math.min(Number.isInteger(avatar?.presetIndex) ? avatar.presetIndex : 0, Math.max(0, AVATAR_IMAGES.length - 1)))] || '';
 
   useEffect(() => {
     function onResize() {
@@ -220,11 +202,15 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
       if (mobileMenuOpen && mobileMenuRef.current && !mobileMenuRef.current.contains(e.target)) {
         setMobileMenuOpen(false);
       }
+      if (quickPanel && quickPanelRef.current && !quickPanelRef.current.contains(e.target)) {
+        setQuickPanel(null);
+      }
     }
     function onEsc(e) {
       if (e.key !== 'Escape') return;
       setStreakOpen(false);
       setMobileMenuOpen(false);
+      setQuickPanel(null);
       if (profileRef.current?.hasAttribute('open')) {
         profileRef.current.removeAttribute('open');
       }
@@ -235,7 +221,7 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onEsc);
     };
-  }, [streakOpen, mobileMenuOpen]);
+  }, [streakOpen, mobileMenuOpen, quickPanel]);
 
   function closeProfileMenu() {
     if (profileRef.current?.hasAttribute('open')) {
@@ -257,6 +243,10 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
     closeProfileMenu();
     logout();
     navigate('/', { replace: true });
+  }
+
+  function toggleQuickPanel(name) {
+    setQuickPanel((current) => (current === name ? null : name));
   }
 
   function handleTabClick(nextTab) {
@@ -301,13 +291,19 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
         </span>
       )}
 
-      {!mobileCompact && <div className="hdr-icon-row">
-        <button type="button" className="hdr-icon-btn" aria-label="Rewards" title="Coming soon">
+      {!mobileCompact && <div className="hdr-icon-row" ref={quickPanelRef}>
+        <button type="button" className="hdr-icon-btn hdr-quick-btn" aria-label="Calendar" onClick={() => toggleQuickPanel('calendar')}>
           <IconGift />
         </button>
-        <button type="button" className="hdr-icon-btn" aria-label="Notifications" title="Coming soon">
+        <button type="button" className="hdr-icon-btn hdr-quick-btn" aria-label="Notifications" onClick={() => toggleQuickPanel('notifications')}>
           <IconBell />
         </button>
+        {quickPanel ? (
+          <div className="hdr-quick-panel" role="dialog" aria-label="Header quick info">
+            {quickPanel === 'notifications' ? 'No notifications!' : 'Coming soon!'}
+          </div>
+        ) : null}
+        <LayoutToggle compact />
         <ThemeToggle compact />
       </div>}
 
@@ -411,13 +407,19 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
                   </button>
                 </nav>
               )}
-              <div className="hdr-icon-row hdr-mobile-icon-row">
-                <button type="button" className="hdr-icon-btn" aria-label="Rewards" title="Coming soon">
+              <div className="hdr-icon-row hdr-mobile-icon-row" ref={quickPanelRef}>
+                <button type="button" className="hdr-icon-btn hdr-quick-btn" aria-label="Calendar" onClick={() => toggleQuickPanel('calendar')}>
                   <IconGift />
                 </button>
-                <button type="button" className="hdr-icon-btn" aria-label="Notifications" title="Coming soon">
+                <button type="button" className="hdr-icon-btn hdr-quick-btn" aria-label="Notifications" onClick={() => toggleQuickPanel('notifications')}>
                   <IconBell />
                 </button>
+                {quickPanel ? (
+                  <div className="hdr-quick-panel hdr-quick-panel-mobile" role="dialog" aria-label="Header quick info">
+                    {quickPanel === 'notifications' ? 'No notifications!' : 'Coming soon!'}
+                  </div>
+                ) : null}
+                <LayoutToggle compact />
                 <ThemeToggle compact />
               </div>
               {!user ? (

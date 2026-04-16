@@ -7,12 +7,14 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('token'));
   const [user, setUser] = useState(null);
   const [progress, setProgress] = useState(null);
+  const [avatar, setAvatar] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const loadSession = useCallback(async (t) => {
     if (!t) {
       setUser(null);
       setProgress(null);
+      setAvatar(null);
       setLoading(false);
       return;
     }
@@ -20,11 +22,13 @@ export function AuthProvider({ children }) {
       const { data } = await api.get('/auth/me');
       setUser(data.user);
       setProgress(data.progress || {});
+      setAvatar(data.avatar || null);
     } catch {
       localStorage.removeItem('token');
       setToken(null);
       setUser(null);
       setProgress(null);
+      setAvatar(null);
     } finally {
       setLoading(false);
     }
@@ -53,6 +57,7 @@ export function AuthProvider({ children }) {
     setToken(null);
     setUser(null);
     setProgress(null);
+    setAvatar(null);
   }, []);
 
   const refreshProgress = useCallback(async () => {
@@ -65,14 +70,16 @@ export function AuthProvider({ children }) {
       token,
       user,
       progress,
+      avatar,
       loading,
       login,
       register,
       logout,
       refreshProgress,
-      setProgress
+      setProgress,
+      setAvatar
     }),
-    [token, user, progress, loading, login, register, logout, refreshProgress]
+    [token, user, progress, avatar, loading, login, register, logout, refreshProgress]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
