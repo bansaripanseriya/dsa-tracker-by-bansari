@@ -1,0 +1,19 @@
+# Render Blueprint: https://render.com/docs/infrastructure-as-code
+# After first deploy, set MONGODB_URI and JWT_SECRET in the service Environment tab.
+
+services:
+  - type: web
+    name: dsa-tracker
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start --prefix server
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false

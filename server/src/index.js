@@ -15,7 +15,11 @@ dotenv.config({ path: envPath });
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 
-const clientOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+const clientOrigins = (
+  process.env.CLIENT_URL ||
+  process.env.RENDER_EXTERNAL_URL ||
+  'http://localhost:5173'
+)
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
