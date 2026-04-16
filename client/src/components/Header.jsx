@@ -82,6 +82,14 @@ function IconLogout() {
   );
 }
 
+function IconMenu() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const RING_R = 14;
 const RING_LEN = 2 * Math.PI * RING_R;
 const AVATAR_IMAGES = Object.entries(
@@ -108,8 +116,13 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [streakOpen, setStreakOpen] = useState(false);
+  const [isMobileView, setIsMobileView] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 768 : false));
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileHeaderHidden, setMobileHeaderHidden] = useState(false);
   const streakRef = useRef(null);
   const profileRef = useRef(null);
+  const mobileMenuRef = useRef(null);
+  const lastScrollYRef = useRef(0);
 
   const weekCount = useMemo(() => countCheckinsCurrentWeek(streak?.checkins), [streak?.checkins]);
   const streakStats = useMemo(() => calcStreak(streak?.checkins || []), [streak?.checkins]);
@@ -161,6 +174,42 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
   }, []);
 
   useEffect(() => {
+    function onResize() {
+      const mobile = window.innerWidth <= 768;
+      setIsMobileView(mobile);
+      if (!mobile) {
+        setMobileMenuOpen(false);
+        setMobileHeaderHidden(false);
+      }
+    }
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    function handleScroll() {
+      if (!isMobileView) return;
+      const currentY = window.scrollY || 0;
+      const delta = currentY - lastScrollYRef.current;
+
+      if (currentY <= 24) {
+        setMobileHeaderHidden(false);
+      } else if (delta > 8) {
+        setMobileHeaderHidden(true);
+        setMobileMenuOpen(false);
+      } else if (delta < -8) {
+        setMobileHeaderHidden(false);
+      }
+
+      lastScrollYRef.current = currentY;
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isMobileView]);
+
+  useEffect(() => {
     function onDocClick(e) {
       if (streakOpen && streakRef.current && !streakRef.current.contains(e.target)) {
         setStreakOpen(false);
@@ -168,10 +217,14 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
       if (profileRef.current?.hasAttribute('open') && !profileRef.current.contains(e.target)) {
         profileRef.current.removeAttribute('open');
       }
+      if (mobileMenuOpen && mobileMenuRef.current && !mobileMenuRef.current.contains(e.target)) {
+        setMobileMenuOpen(false);
+      }
     }
     function onEsc(e) {
       if (e.key !== 'Escape') return;
       setStreakOpen(false);
+      setMobileMenuOpen(false);
       if (profileRef.current?.hasAttribute('open')) {
         profileRef.current.removeAttribute('open');
       }
@@ -182,7 +235,7 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onEsc);
     };
-  }, [streakOpen]);
+  }, [streakOpen, mobileMenuOpen]);
 
   function closeProfileMenu() {
     if (profileRef.current?.hasAttribute('open')) {
@@ -206,8 +259,15 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
     navigate('/', { replace: true });
   }
 
+  function handleTabClick(nextTab) {
+    handleTabNavigation(nextTab);
+    setMobileMenuOpen(false);
+  }
+
+  const mobileCompact = isMobileView;
+
   return (
-    <header className="hdr">
+    <header className={`hdr${mobileCompact ? ' hdr-mobile-collapsed' : ''}${mobileCompact && mobileHeaderHidden ? ' hdr-mobile-hidden' : ''}`}>
       <span className="hdr-note-sr">{note}</span>
       <Link className="hdr-brand" to="/">
         <span className="hdr-brand-stack">
@@ -216,17 +276,17 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
         </span>
       </Link>
 
-      {showMainNav && (
+      {showMainNav && !mobileCompact && (
         <nav className="hdr-nav" aria-label="Main sections">
-          <button type="button" className={`hdr-nav-btn${activeTab === 'sheet' ? ' active' : ''}`} onClick={() => handleTabNavigation('sheet')}>
+          <button type="button" className={`hdr-nav-btn${activeTab === 'sheet' ? ' active' : ''}`} onClick={() => handleTabClick('sheet')}>
             <span>Sheet</span>
             <ChevronDown className="hdr-nav-chev" />
           </button>
-          <button type="button" className={`hdr-nav-btn practice-tab${activeTab === 'practice' ? ' active' : ''}`} onClick={() => handleTabNavigation('practice')}>
+          <button type="button" className={`hdr-nav-btn practice-tab${activeTab === 'practice' ? ' active' : ''}`} onClick={() => handleTabClick('practice')}>
             <span>Practice</span>
             <ChevronDown className="hdr-nav-chev" />
           </button>
-          <button type="button" className={`hdr-nav-btn streak-tab${activeTab === 'streak' ? ' active' : ''}`} onClick={() => handleTabNavigation('streak')}>
+          <button type="button" className={`hdr-nav-btn streak-tab${activeTab === 'streak' ? ' active' : ''}`} onClick={() => handleTabClick('streak')}>
             <span>Streak</span>
             <ChevronDown className="hdr-nav-chev" />
           </button>
@@ -241,7 +301,7 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
         </span>
       )}
 
-      <div className="hdr-icon-row">
+      {!mobileCompact && <div className="hdr-icon-row">
         <button type="button" className="hdr-icon-btn" aria-label="Rewards" title="Coming soon">
           <IconGift />
         </button>
@@ -249,9 +309,9 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
           <IconBell />
         </button>
         <ThemeToggle compact />
-      </div>
+      </div>}
 
-      {!user && (
+      {!user && !mobileCompact && (
         <div className="hdr-auth-links">
           <Link className="hdr-link" to="/login">
             Sign in
@@ -262,7 +322,7 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
         </div>
       )}
 
-      <div className="hdr-streak-pop" ref={streakRef}>
+      {!mobileCompact && <div className="hdr-streak-pop" ref={streakRef}>
         <button
           type="button"
           className="hdr-streak-pill"
@@ -323,12 +383,86 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
             <div className="hdr-streak-total">Total Active Days: {streakStats.total}</div>
           </div>
         ) : null}
-      </div>
+      </div>}
+
+      {mobileCompact && (
+        <div className="hdr-mobile-actions" ref={mobileMenuRef}>
+          <button
+            type="button"
+            className="hdr-mobile-menu-btn"
+            aria-label="Open menu"
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen((v) => !v)}
+          >
+            <IconMenu />
+          </button>
+          {mobileMenuOpen ? (
+            <div className="hdr-mobile-menu-panel">
+              {showMainNav && (
+                <nav className="hdr-mobile-nav" aria-label="Mobile sections">
+                  <button type="button" className={`hdr-nav-btn${activeTab === 'sheet' ? ' active' : ''}`} onClick={() => handleTabClick('sheet')}>
+                    <span>Sheet</span>
+                  </button>
+                  <button type="button" className={`hdr-nav-btn practice-tab${activeTab === 'practice' ? ' active' : ''}`} onClick={() => handleTabClick('practice')}>
+                    <span>Practice</span>
+                  </button>
+                  <button type="button" className={`hdr-nav-btn streak-tab${activeTab === 'streak' ? ' active' : ''}`} onClick={() => handleTabClick('streak')}>
+                    <span>Streak</span>
+                  </button>
+                </nav>
+              )}
+              <div className="hdr-icon-row hdr-mobile-icon-row">
+                <button type="button" className="hdr-icon-btn" aria-label="Rewards" title="Coming soon">
+                  <IconGift />
+                </button>
+                <button type="button" className="hdr-icon-btn" aria-label="Notifications" title="Coming soon">
+                  <IconBell />
+                </button>
+                <ThemeToggle compact />
+              </div>
+              {!user ? (
+                <div className="hdr-auth-links hdr-mobile-auth-links">
+                  <Link className="hdr-link" to="/login" onClick={() => setMobileMenuOpen(false)}>
+                    Sign in
+                  </Link>
+                  <Link className="hdr-link hdr-link-primary" to="/register" onClick={() => setMobileMenuOpen(false)}>
+                    Create account
+                  </Link>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="hdr-streak-pill hdr-mobile-streak-pill"
+                  aria-label={`Coding streak this week: ${weekCount} of 7 days`}
+                  onClick={() => {
+                    setStreakOpen((x) => !x);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <span className="hdr-streak-bolt" aria-hidden="true">
+                    ⚡
+                  </span>
+                  <span className="hdr-streak-dot" aria-hidden="true" />
+                  <span className="hdr-streak-text">
+                    <span>{weekCount}</span>/7 Coding Streak!
+                  </span>
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {user ? (
-        <details className="hdr-profile" ref={profileRef}>
+        <details className={`hdr-profile${mobileCompact ? ' hdr-profile-mobile' : ''}`} ref={profileRef}>
           <summary className="hdr-profile-summary" aria-label="Account menu">
-            <ChevronDown className="hdr-profile-chev" />
+            {mobileCompact ? (
+              <div className="hdr-mobile-avatar" aria-hidden="true">
+                {selectedAvatarSrc ? <img src={selectedAvatarSrc} alt="Profile avatar" /> : initial}
+              </div>
+            ) : (
+              <ChevronDown className="hdr-profile-chev" />
+            )}
           </summary>
           <div className="hdr-profile-panel">
             <button type="button" className="hdr-menu-item" onClick={handleProfile} title="Coming soon">

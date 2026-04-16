@@ -477,3 +477,15 @@ button.day-head {
 .modal-close:hover {
   background: rgba(197, 206, 220, 0.45);
 }
+
+.auth-page,
+.auth-page * {
+  font-family: var(--doodle-font) !important;
+}
+
+.auth-card h1 { font-size: 34px; }
+.auth-sub { font-size: 20px; }
+.auth-card label span { font-size: 16px; }
+.auth-card input { font-size: 18px; padding: 12px 14px; }
+.auth-submit { font-size: 20px; padding: 14px; }
+.auth-footer { font-size: 18px; }

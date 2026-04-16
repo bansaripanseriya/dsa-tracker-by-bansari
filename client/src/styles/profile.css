@@ -509,3 +509,20 @@ html[data-theme='dark'] .profile-avatar-chip.active {
   border-color: #34d399;
   box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.26);
 }
+
+.profile-page,
+.profile-page * {
+  font-family: var(--doodle-font) !important;
+}
+
+.profile-user-card h2 { font-size: 24px; }
+.profile-user-card p { font-size: 16px; }
+.profile-side-link { font-size: 18px; }
+.profile-tab-btn { font-size: 17px; }
+.profile-section-card h3 { font-size: 32px; }
+.profile-section-card p { font-size: 17px; }
+.profile-form-grid label { font-size: 16px; }
+.profile-form-grid input,
+.profile-form-grid textarea,
+.profile-skill-input { font-size: 17px; padding: 12px 14px; }
+.profile-btn { font-size: 17px; padding: 11px 18px; }

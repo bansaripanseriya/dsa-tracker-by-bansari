@@ -7,6 +7,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Tracker from './pages/Tracker';
 import Profile from './pages/Profile';
+import ScrollToTopButton from './components/ScrollToTopButton';
 
 function TrackerWithUserKey() {
   const { user } = useAuth();
@@ -98,6 +99,7 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <AppRoutes />
+          <ScrollToTopButton />
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
