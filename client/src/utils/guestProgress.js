@@ -1,5 +1,5 @@
 import { appendTodayIfMissing, dsaTodayStr } from './streak.js';
-import { syncSheetDoneForPractice } from './practiceSheetSync.js';
+import { expandSheetDone, syncSheetDoneForPractice, toggleProblemEverywhere } from './practiceSheetSync.js';
 
 const GUEST_KEY = 'dsa-tracker-guest-progress-v1';
 
@@ -58,11 +58,7 @@ export function applyPendingToggle(merged, pending) {
     streak: { checkins: [...(merged.streak?.checkins || [])] }
   };
   if (pending.type === 'sheet') {
-    const k = `${pending.sid}_${pending.pi}`;
-    const s = new Set(next.sheetDone);
-    if (s.has(k)) s.delete(k);
-    else s.add(k);
-    next.sheetDone = [...s];
+    next.sheetDone = toggleProblemEverywhere(next.sheetDone, `${pending.sid}_${pending.pi}`);
     return next;
   }
   if (pending.type === 'sheetSaved') {
@@ -113,9 +109,10 @@ export function mergeWithServerProgress(local, server) {
     .map((x) => parseInt(x, 10))
     .filter((n) => !Number.isNaN(n));
   open.sort((a, b) => a - b);
+  const practiceDone = unionStrings(local.practiceDone, s.practiceDone).sort();
   return {
-    sheetDone: unionStrings(local.sheetDone, s.sheetDone).sort(),
-    practiceDone: unionStrings(local.practiceDone, s.practiceDone).sort(),
+    sheetDone: [...expandSheetDone(unionStrings(local.sheetDone, s.sheetDone), practiceDone)].sort(),
+    practiceDone,
     sheetSaved: unionStrings(local.sheetSaved, s.sheetSaved).sort(),
     practiceSaved: unionStrings(local.practiceSaved, s.practiceSaved).sort(),
     streak: { checkins: unionStrings(streakIn(local.streak), streakIn(s.streak)).sort() },

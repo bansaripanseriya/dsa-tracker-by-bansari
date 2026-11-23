@@ -1,47 +1,21 @@
-import { DATA } from '../data/problems';
+import { TOTALS, countByDifficulty, lcSetFromKeys } from '@shared/problemIndex.js';
 
-/** Aggregate sheet completion and per-difficulty counts from `sheetDone` keys `sectionId_index`. */
+/**
+ * Sheet completion counted by unique LeetCode problem (a problem listed under several
+ * topics counts once), from `sheetDone` keys `sectionId_index`.
+ */
 export function computeSheetStats(sheetDone) {
-  const set = new Set(sheetDone || []);
-  let total = 0;
-  let done = 0;
-  let eT = 0;
-  let eD = 0;
-  let mT = 0;
-  let mD = 0;
-  let hT = 0;
-  let hD = 0;
-
-  for (const s of DATA) {
-    s.p.forEach((p, i) => {
-      total += 1;
-      const k = `${s.id}_${i}`;
-      const is = set.has(k);
-      const diff = p[2];
-      if (diff === 'Easy') {
-        eT += 1;
-        if (is) eD += 1;
-      } else if (diff === 'Medium') {
-        mT += 1;
-        if (is) mD += 1;
-      } else if (diff === 'Hard') {
-        hT += 1;
-        if (is) hD += 1;
-      }
-      if (is) done += 1;
-    });
-  }
-
-  const pctRaw = total ? Math.min(100, (done / total) * 100) : 0;
-  const pctLabel = formatSheetPctLabel(done, total);
+  const done = countByDifficulty(lcSetFromKeys(sheetDone));
+  const total = TOTALS.all;
+  const pctRaw = total ? Math.min(100, (done.total / total) * 100) : 0;
   return {
     total,
-    done,
+    done: done.total,
     pctRaw,
-    pctLabel,
-    easy: { done: eD, total: eT },
-    med: { done: mD, total: mT },
-    hard: { done: hD, total: hT }
+    pctLabel: formatSheetPctLabel(done.total, total),
+    easy: { done: done.easy, total: TOTALS.easy },
+    med: { done: done.medium, total: TOTALS.medium },
+    hard: { done: done.hard, total: TOTALS.hard }
   };
 }
 

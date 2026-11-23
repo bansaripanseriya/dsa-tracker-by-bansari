@@ -1,22 +1,16 @@
-import { DATA } from '../data/problems';
-import { PRACTICE_DAYS } from '../data/practicePlan';
+import { PRACTICE_KEY_TO_LC, sheetKeysForLc } from '@shared/problemIndex.js';
+
+export { toggleProblemEverywhere, expandSheetDone } from '@shared/problemIndex.js';
 
 /** All sheet keys `sectionId_index` for a LeetCode problem number. */
 export function sheetKeysForLeetCodeNumber(num) {
   if (num == null || Number.isNaN(num)) return [];
-  const keys = [];
-  for (const s of DATA) {
-    s.p.forEach((row, idx) => {
-      if (row[0] === num) keys.push(`${s.id}_${idx}`);
-    });
-  }
-  return keys;
+  return sheetKeysForLc(num);
 }
 
 /** Practice day + index → LeetCode number, or undefined. */
 export function practiceProblemNumber(day, pi) {
-  const dayEntry = PRACTICE_DAYS.find((d) => d.day === day);
-  return dayEntry?.problems?.[pi]?.[0];
+  return PRACTICE_KEY_TO_LC.get(`p${day}_${pi}`);
 }
 
 /** When a practice row is marked done, add matching sheet keys. (Unchecking practice does not remove sheet marks.) */

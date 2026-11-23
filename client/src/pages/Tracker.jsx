@@ -7,9 +7,9 @@ import LoginModal from '../components/LoginModal';
 import SheetTab from '../components/tabs/SheetTab';
 import PracticeTab from '../components/tabs/PracticeTab';
 import StreakTab from '../components/tabs/StreakTab';
-import { DATA } from '../data/problems';
+import { TOTALS } from '@shared/problemIndex.js';
 import { applyPendingToggle, clearGuestProgress, loadGuestProgress, mergeWithServerProgress, saveGuestProgress } from '../utils/guestProgress';
-import { syncSheetDoneForPractice } from '../utils/practiceSheetSync';
+import { expandSheetDone, syncSheetDoneForPractice, toggleProblemEverywhere } from '../utils/practiceSheetSync';
 import { appendTodayIfMissing, dsaTodayStr } from '../utils/streak';
 
 function key(sid, pi) {
@@ -18,8 +18,6 @@ function key(sid, pi) {
 function pk(day, pi) {
   return `p${day}_${pi}`;
 }
-
-const totalProblems = () => DATA.reduce((a, s) => a + s.p.length, 0);
 
 export default function Tracker() {
   const [searchParams] = useSearchParams();
@@ -68,7 +66,7 @@ export default function Tracker() {
     if (loading) return;
     if (token) return;
     const g = loadGuestProgress();
-    setSheetDone(g.sheetDone);
+    setSheetDone(expandSheetDone(g.sheetDone, g.practiceDone));
     setPracticeDone(g.practiceDone);
     setSheetSaved(g.sheetSaved || []);
     setPracticeSaved(g.practiceSaved || []);
@@ -80,7 +78,7 @@ export default function Tracker() {
   useEffect(() => {
     if (loading) return;
     if (!token || !user || progress == null) return;
-    setSheetDone(progress.sheetDone || []);
+    setSheetDone(expandSheetDone(progress.sheetDone || [], progress.practiceDone || []));
     setPracticeDone(progress.practiceDone || []);
     setSheetSaved(progress.sheetSaved || []);
     setPracticeSaved(progress.practiceSaved || []);
@@ -124,14 +122,9 @@ export default function Tracker() {
     return () => clearTimeout(t);
   }, [sheetDone, practiceDone, sheetSaved, practiceSaved, streak.checkins, openSections, token, user]);
 
+  /** A problem listed under several topics is ticked / unticked in all of them. */
   const _toggleSheet = useCallback((sid, pi) => {
-    const k = key(sid, pi);
-    setSheetDone((prev) => {
-      const next = new Set(prev);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-      return [...next];
-    });
+    setSheetDone((prev) => toggleProblemEverywhere(prev, key(sid, pi)));
   }, []);
 
   const toggleSheet = useCallback(
@@ -282,7 +275,7 @@ export default function Tracker() {
     [login, setProgress]
   );
 
-  const note = `${totalProblems()} problems · 25 topics`;
+  const note = `${TOTALS.all} problems · 25 topics`;
 
   if (loading && token) {
     return (

@@ -50,8 +50,12 @@ dsa-tracker-by-bansari/
       pages/Register.jsx
       pages/Profile.jsx
       components/
-      data/
       utils/
+  shared/                 # used by both client (as @shared) and server
+    data/problems.js      # the sheet: 25 topics, 1,677 unique problems
+    data/practicePlan.js  # 60-day practice plan
+    problemIndex.js       # key ↔ LeetCode number lookups, unique counting
+    scoring.js            # leaderboard points and IST week boundaries
   server/
     src/
       index.js
@@ -60,6 +64,11 @@ dsa-tracker-by-bansari/
       middleware/auth.js
       routes/auth.js
       routes/progress.js
+    scripts/seed.js       # demo data for local development
+    test/                 # node --test unit tests
+  docs/
+    friends-implementation-plan.md
+  .env.example
   package.json
   README.md
 ```
@@ -70,15 +79,28 @@ dsa-tracker-by-bansari/
 
 Install:
 
-- Node.js 20+
+- Node.js 20+ (check with `node -v`; Vite 6 and `node --watch` do not run on Node 16)
 - npm
-- MongoDB Atlas connection string
+- MongoDB — either a local server (default `mongodb://127.0.0.1:27017`) or a MongoDB Atlas connection string
+
+### Quick start (local MongoDB)
+
+```bash
+cp .env.example .env        # defaults already point at local MongoDB; set JWT_SECRET
+npm ci && npm ci --prefix server && npm ci --prefix client
+npm run seed                # optional: demo accounts with progress
+npm run dev                 # API on :4000, app on http://localhost:5173
+```
+
+Demo accounts created by `npm run seed` (password `password123` for all):
+`aditi@example.com`, `priya@example.com`, `rohan@example.com`, `kabir@example.com`.
+The seed only runs against a local database unless you pass `--force`.
 
 ---
 
 ## 5) Environment Variables
 
-Create a `.env` file in the **project root** (same level as root `package.json`):
+Create a `.env` file in the **project root** (same level as root `package.json`) — easiest is `cp .env.example .env`:
 
 ```env
 MONGODB_URI=your_mongodb_connection_string
@@ -140,6 +162,8 @@ At root:
 - `npm run dev:server` -> starts only backend
 - `npm run dev:client` -> starts only frontend
 - `npm run build` -> builds frontend app
+- `npm run seed` -> creates/resets demo accounts in a local database
+- `npm test` -> runs the unit tests (`server/test`, Node's built-in test runner)
 
 In `server/`:
 

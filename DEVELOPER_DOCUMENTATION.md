@@ -90,6 +90,17 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 
 **Frontend dev proxy:** `client/vite.config.js` proxies `/api` → `http://localhost:4000`, so the browser can call `/api/...` without CORS pain during development.
 
+**Shared code alias:** `client/vite.config.js` also maps `@shared` → `../shared` and adds that folder to `server.fs.allow` (Vite only serves files inside `client/` by default). See §11.
+
+**Template:** `.env.example` in the repo root documents every variable; `cp .env.example .env` and set `JWT_SECRET`.
+
+**Local data and tests:**
+
+| Command (repo root) | What it does |
+|---|---|
+| `npm run seed` | `server/scripts/seed.js` — creates/resets 4 demo users (`aditi@`, `priya@`, `rohan@`, `kabir@example.com`, password `password123`) with sheet, practice and streak data. Refuses to run against a non-local `MONGODB_URI` unless `--force`. |
+| `npm test` | Runs `node --test` in `server/` (built-in Node test runner, no dependencies). Tests live in `server/test/*.test.js` and cover the shared modules. |
+
 ---
 
 ## 5. Database (MongoDB) and data model
@@ -298,15 +309,16 @@ This page orchestrates **guest vs logged-in** behavior and **autosave**.
 
 ### 9.4 `SheetTab.jsx`
 
-- Reads **`DATA`** from `data/problems.js`.
+- Reads **`DATA`** from `@shared/data/problems.js`.
 - Local filter state: `filt` (`all`, difficulty, `done`, `todo`), search `q`.
-- **`stats`:** totals, done counts, per-difficulty counts via `useMemo`.
+- **`stats`:** totals, done counts, per-difficulty counts via `computeSheetStats` — counted by **unique problem** (out of `TOTALS.all`, 1,677), not by checkbox.
+- Per-section counters (`x/y solved` on each section header) still count that section's rows.
 - **`sectionsHtml`:** builds list of collapsible sections and problem rows with **LeetCode** link from `leetCodeProblemUrl`.
 - Calls parent `toggleSheet`, `toggleSec`.
 
 ### 9.5 `PracticeTab.jsx`
 
-- Reads **`PRACTICE_DAYS`** from `data/practicePlan.js`.
+- Reads **`PRACTICE_DAYS`** from `@shared/data/practicePlan.js`.
 - Renders day cards, progress bar, toggles via `togglePrac` / `toggleDay`.
 
 ### 9.6 `StreakTab.jsx` (large dashboard)
@@ -338,17 +350,23 @@ Uses many helpers from `utils/streak.js` and `utils/sheetStats.js`.
 | `saveGuestProgress(data)` | Normalize and write JSON to localStorage. |
 | `clearGuestProgress()` | Remove guest key. |
 | `unionStrings(a, b)` | Unique merge of two string arrays. |
-| `applyPendingToggle(merged, pending)` | After login, replay user intent captured in `pending` (`sheet` / `practice` / `checkin`) on top of merged data. |
-| `mergeWithServerProgress(local, server)` | Union of sheet keys, practice keys, streak dates, and open sections (numeric merge). |
+| `applyPendingToggle(merged, pending)` | After login, replay user intent captured in `pending` (`sheet` / `practice` / `checkin`) on top of merged data. A `sheet` toggle uses `toggleProblemEverywhere`. |
+| `mergeWithServerProgress(local, server)` | Union of sheet keys, practice keys, streak dates, and open sections (numeric merge); the sheet keys are then passed through `expandSheetDone`. |
 | `mergeGuestProgressAfterAuth(apiClient, setProgress)` | `GET /auth/me`, merge with guest, append today to streak, `PUT /progress`, update context, clear guest. |
 
 ### 10.2 `client/src/utils/practiceSheetSync.js`
 
 | Function | Role |
 |----------|------|
-| `sheetKeysForLeetCodeNumber(num)` | Find every sheet key `[sectionId]_[index]` whose problem number matches `num`. |
+Thin client wrapper over `shared/problemIndex.js` (§11.3).
+
+| Function | Role |
+|----------|------|
+| `sheetKeysForLeetCodeNumber(num)` | Every sheet key `[sectionId]_[index]` for that LeetCode number. |
 | `practiceProblemNumber(day, pi)` | LeetCode number for that practice cell. |
 | `syncSheetDoneForPractice(sheetDone, day, pi, practiceNowDone)` | If practice is marked **done**, add **all** matching sheet keys for that LeetCode number. **Unchecking practice does not remove** sheet marks (by design). |
+| `toggleProblemEverywhere` (re-export) | Used by `Tracker._toggleSheet`: ticking or unticking a sheet row applies to **every section** that lists the same problem. |
+| `expandSheetDone` (re-export) | Used when progress is loaded (guest and signed-in) so old data ticked in only one section shows in all of them. |
 
 ### 10.3 `client/src/utils/streak.js`
 
@@ -375,7 +393,7 @@ Uses many helpers from `utils/streak.js` and `utils/sheetStats.js`.
 
 | Function | Role |
 |----------|------|
-| `computeSheetStats(sheetDone)` | Walks entire `DATA` sheet: counts totals and done per difficulty; `pctRaw` for bars; `pctLabel` human string via `formatSheetPctLabel`. |
+| `computeSheetStats(sheetDone)` | Counts **unique LeetCode problems** done (via `lcSetFromKeys`) against `TOTALS` from `shared/problemIndex.js`; returns `{ total, done, pctRaw, pctLabel, easy, med, hard }`. A problem listed under several topics counts once. Used by `SheetTab` and `StreakTab`. |
 | `formatSheetPctLabel(done, total)` | **Private** helper inside file — formats percent text (`<0.1`, one decimal, etc.). |
 
 ### 10.5 `client/src/utils/leetcode.js`
@@ -386,17 +404,46 @@ Uses many helpers from `utils/streak.js` and `utils/sheetStats.js`.
 
 ---
 
-## 11. Frontend — data files (not “functions”, but critical)
+## 11. Shared code (`shared/`) — data and pure logic used by client **and** server
 
-### 11.1 `client/src/data/problems.js`
+`shared/` holds plain ES modules with no dependencies (`shared/package.json` only declares `"type": "module"`). The client imports them as `@shared/...`; the server and scripts import them with relative paths (`../../shared/...`).
+
+### 11.1 `shared/data/problems.js`
 
 - **Exports:** `DATA` — array of sections `{ id, title, color, bg, p }`.
 - **`p` entries:** `[leetcodeNumber, "Title", "Easy"|"Medium"|"Hard"]`.
-- Large static dataset (~25 topics). This is the **source of truth** for the sheet tab.
+- 25 topics, **2,530 rows but 1,677 unique problems** — many problems are listed under several topics (e.g. 392 *Is Subsequence* is in 5).
+- **Keys are positional.** Progress is stored as `"<sectionId>_<index>"`, so **only ever append** to a section; inserting or reordering would move users' ticks onto different problems.
+- Every practice-plan problem is also on the sheet (139, 494 appended to section 10 and 474 to section 11 for this). Tests enforce this, and that each problem has one difficulty everywhere.
 
-### 11.2 `client/src/data/practicePlan.js`
+### 11.2 `shared/data/practicePlan.js`
 
-- **Exports:** `PRACTICE_DAYS` — array of `{ day, topic, problems: [[num, title, diff], ...] }`.
+- **Exports:** `PRACTICE_DAYS` — array of `{ day, topic, problems: [[num, title, diff], ...] }`. Keys are `"p<day>_<index>"`.
+
+### 11.3 `shared/problemIndex.js`
+
+Lookups built once at import time.
+
+| Export | Role |
+|--------|------|
+| `SHEET_KEY_TO_LC`, `PRACTICE_KEY_TO_LC` | Maps from progress keys to LeetCode numbers. |
+| `LC_INFO` | LeetCode number → `{ num, name, difficulty, sheetKeys }`. |
+| `TOTALS` | Unique problems on the sheet: `{ all: 1677, easy: 449, medium: 884, hard: 344 }`. |
+| `sheetKeysForLc(num)` | All sheet keys of a problem. |
+| `lcSetFromKeys(sheetDone, practiceDone)` | Set of unique LeetCode numbers done; unknown keys ignored. |
+| `countByDifficulty(nums)` | `{ total, easy, medium, hard }`. |
+| `toggleProblemEverywhere(sheetDone, key)` | Tick/untick a problem in every section it appears in. |
+| `expandSheetDone(sheetDone, practiceDone)` | Add sibling keys for every done problem (sheet or practice). Returns the same array if nothing changed. |
+
+### 11.4 `shared/scoring.js`
+
+For the upcoming weekly leaderboard (see `docs/friends-implementation-plan.md`).
+
+| Export | Role |
+|--------|------|
+| `POINTS`, `pointsFor(difficulty)` | Easy 5, Medium 10, Hard 15. |
+| `IST_OFFSET_MS` | UTC+5:30 (India has no daylight saving). |
+| `weekRangeIST(now, offset)` | `{ start, end }` of the leaderboard week: Monday 00:00 IST to the next Monday 00:00 IST, `offset` weeks back. |
 
 ---
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { PRACTICE_DAYS } from '../../data/practicePlan';
+import { PRACTICE_DAYS } from '@shared/data/practicePlan.js';
 import { leetCodeProblemUrl } from '../../utils/leetcode';
 
 function pk(day, pi) {

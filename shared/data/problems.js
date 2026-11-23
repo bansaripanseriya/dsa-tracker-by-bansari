@@ -507,6 +507,8 @@ export const DATA = [
 [1872,"Stone Game VIII","Hard"],[1900,"The Earliest and Latest Rounds Where Players Compete","Hard"],
 [1931,"Painting a Grid With Three Different Colors","Hard"],[1937,"Maximum Number of Points with Cost","Medium"],
 [1947,"Maximum Compatibility Score Sum","Medium"],[1964,"Find the Longest Valid Obstacle Course at Each Position","Hard"],
+// Appended from the practice plan. Keys are positional (sectionId_index): only ever append.
+[139,"Word Break","Medium"],[494,"Target Sum","Medium"],
 ]},
 
 {id:11,title:"Dynamic Programming — 2D / Grid",color:"#fb923c",bg:"rgba(251,146,60,0.13)",p:[
@@ -540,6 +542,8 @@ export const DATA = [
 [1594,"Maximum Non Negative Product in a Matrix","Medium"],[1621,"Number of Sets of K Non-Overlapping Line Segments","Medium"],
 [1690,"Stone Game VII","Medium"],[1691,"Maximum Height by Stacking Cuboids","Hard"],
 [1745,"Palindrome Partitioning IV","Hard"],
+// Appended from the practice plan. Keys are positional (sectionId_index): only ever append.
+[474,"Ones and Zeroes","Medium"],
 ]},
 
 {id:12,title:"Backtracking",color:"#c084fc",bg:"rgba(192,132,252,0.13)",p:[
@@ -889,7 +893,7 @@ export const DATA = [
 [1502,"Can Make Arithmetic Progression From Sequence","Easy"],[1508,"Range Sum of Sorted Subarray Sums","Medium"],
 [1509,"Minimum Difference Between Largest and Smallest Value in Three Moves","Medium"],
 [1561,"Maximum Number of Coins You Can Get","Medium"],[1580,"Put Boxes Into the Warehouse II","Medium"],
-[1636,"Sort Array by Increasing Frequency","Medium"],[1647,"Minimum Deletions to Make Character Frequencies Unique","Medium"],
+[1636,"Sort Array by Increasing Frequency","Easy"],[1647,"Minimum Deletions to Make Character Frequencies Unique","Medium"],
 [1710,"Maximum Units on a Truck","Easy"],[1727,"Largest Submatrix With Rearrangements","Medium"],
 [1877,"Minimize Maximum Pair Sum in Array","Medium"],[1913,"Maximum Product Difference Between Two Pairs","Easy"],
 [2099,"Find Subsequence of Length K With the Largest Sum","Easy"],[2164,"Sort Even and Odd Indices Independently","Easy"],
@@ -951,7 +955,7 @@ export const DATA = [
 [1534,"Count Good Triplets","Easy"],[1539,"Kth Missing Positive Number","Easy"],
 [1570,"Dot Product of Two Sparse Vectors","Medium"],[1577,"Number of Ways Where Square of Number Is Equal to Product of Two Numbers","Medium"],
 [1590,"Make Sum Divisible by P","Medium"],[1604,"Alert Using Same Key-Card Three or More Times in a One Hour Period","Medium"],
-[1636,"Sort Array by Increasing Frequency","Medium"],[1640,"Check Array Formation Through Concatenation","Easy"],
+[1636,"Sort Array by Increasing Frequency","Easy"],[1640,"Check Array Formation Through Concatenation","Easy"],
 [1657,"Determine if Two Strings Are Close","Medium"],[1679,"Max Number of K-Sum Pairs","Medium"],
 [1684,"Count the Number of Consistent Strings","Easy"],[1695,"Maximum Erasure Value","Medium"],
 [1743,"Restore the Array From Adjacent Pairs","Medium"],[1748,"Sum of Unique Elements","Easy"],
