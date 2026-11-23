@@ -10,7 +10,7 @@ Design canvas: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3
 | Phase | State | Notes |
 |---|---|---|
 | 1. Shared data & unique counting | **Done** (2026-11-24) | See "Phase 1 — what shipped" below. |
-| 2. Solve tracking | Not started | |
+| 2. Solve tracking | **Done** (2026-11-24) | See "Phase 2 — what shipped" below. |
 | 3. Identity | Not started | |
 | 4. Friendships & search API | Not started | |
 | 5. Leaderboard API | Not started | |
@@ -109,6 +109,17 @@ Design canvas: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3
 
 **Done when:** ticking a problem creates one `solves` doc; ticking it in another section creates nothing new; unticking every key sets `active: false`; re-ticking reactivates it with the **original** `solvedAt`; `user.stats` matches the Streak tab numbers.
 
+### Phase 2 — what shipped
+
+- `server/src/models/Solve.js`; `User` gained `stats` and `solvesSyncedAt`.
+- `server/src/lib/solves.js` — `diffSolves`, `computeStats`, `backfillSolves`, `syncSolves`.
+- **Changed from the plan: reconcile against the `solves` collection, not the previous progress.** `syncSolves` compares the new progress with the user's existing solve documents, so a failed or interrupted sync is repaired by the next save. The previous progress is only used once, for the backfill.
+- **Added: lazy backfill.** If `solvesSyncedAt` is null, the first progress save after deploy records everything already done as `source: 'backfill'` before anything else. This closes a farming gap before the Phase 7 migration runs (otherwise un-ticking and re-ticking an old problem would have created a fresh `live` solve). The migration will call the same `backfillSolves`.
+- `PUT /api/progress` saves progress first, then syncs solves; a sync error is logged and doesn't fail the request. The handler now has `try/catch` (the GET handler is untouched — bug-fix release).
+- Tests: `server/test/solves.test.js` (pure) and `server/test/solves.db.test.js` (real MongoDB, throwaway `dsa-tracker-test` DB, auto-skips) — 21 tests total.
+- `npm run seed` now writes `stats`, clears demo users' solves and resets `solvesSyncedAt`.
+- Verified end to end through the API: an existing user's 164 problems were backfilled and a newly ticked Hard became one `live` solve worth 15 points.
+
 ---
 
 ## Phase 3 — Identity: tags, discoverability, profile name
@@ -205,7 +216,7 @@ Map each screen to its canvas board.
 ## Phase 7 — Migration, seed, rollout
 
 1. **`server/scripts/migrate-friends.js`** (`npm run migrate:friends`, idempotent). Per user:
-   assign tag → build `nameSearch` → set `discoverability.byName: true` if missing → `expandSheetDone` → backfill `solves` with `source: 'backfill'`, `solvedAt: user.createdAt` (skip existing) → compute `stats`.
+   assign tag → build `nameSearch` → set `discoverability.byName: true` if missing → `expandSheetDone` → `backfillSolves(user, lcSetFromKeys(progress))` for users with `solvesSyncedAt: null` (already idempotent, from Phase 2) → compute `stats`.
 2. **Update `server/scripts/seed.js`:** fixed tags for demo users (aditi `A4TZ6HW`, priya `7K3QX9P`, rohan `R8M2VQA`, kabir `K9P3NXE`); friendships aditi–priya and aditi–rohan (accepted), kabir → aditi (pending); one extra demo user with name search switched off; **live** solves spread over this and last week so the leaderboard has data.
 3. **Rollout on Render** (no new env vars):
    1. Deploy Phases 1–5 (backwards compatible; UI unchanged except unique counting).

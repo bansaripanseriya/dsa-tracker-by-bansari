@@ -13,6 +13,8 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { User } from '../src/models/User.js';
+import { Solve } from '../src/models/Solve.js';
+import { computeStats } from '../src/lib/solves.js';
 import { DATA } from '../../shared/data/problems.js';
 import { PRACTICE_DAYS } from '../../shared/data/practicePlan.js';
 import { TOTALS, expandSheetDone, lcSetFromKeys } from '../../shared/problemIndex.js';
@@ -105,15 +107,27 @@ async function main() {
 
   for (const u of DEMO_USERS) {
     const progress = buildProgress(u);
-    await User.findOneAndUpdate(
+    const done = lcSetFromKeys(progress.sheetDone, progress.practiceDone);
+    const user = await User.findOneAndUpdate(
       { email: u.email },
       {
-        $set: { email: u.email, name: u.name, passwordHash, progress, notes: [], skills: [] },
+        $set: {
+          email: u.email,
+          name: u.name,
+          passwordHash,
+          progress,
+          stats: computeStats(done, progress.streak.checkins),
+          // Solve history is rebuilt (as backfill) on this user's next progress save.
+          solvesSyncedAt: null,
+          notes: [],
+          skills: []
+        },
         $unset: { resume: 1 }
       },
-      { upsert: true, setDefaultsOnInsert: true }
+      { upsert: true, setDefaultsOnInsert: true, new: true }
     );
-    const solved = lcSetFromKeys(progress.sheetDone, progress.practiceDone).size;
+    await Solve.deleteMany({ userId: user._id });
+    const solved = done.size;
     console.log(
       `  ${u.email.padEnd(20)} ${String(solved).padStart(4)}/${TOTALS.all} solved · ` +
         `${String(progress.practiceDone.length).padStart(3)} practice · ${u.streak}-day streak`

@@ -99,7 +99,7 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 | Command (repo root) | What it does |
 |---|---|
 | `npm run seed` | `server/scripts/seed.js` — creates/resets 4 demo users (`aditi@`, `priya@`, `rohan@`, `kabir@example.com`, password `password123`) with sheet, practice and streak data. Refuses to run against a non-local `MONGODB_URI` unless `--force`. |
-| `npm test` | Runs `node --test` in `server/` (built-in Node test runner, no dependencies). Tests live in `server/test/*.test.js` and cover the shared modules. |
+| `npm test` | Runs `node --test` in `server/` (built-in Node test runner, no dependencies). Tests live in `server/test/*.test.js`. `*.db.test.js` files use a throwaway `dsa-tracker-test` database (or `MONGODB_URI_TEST`; the name must end in `-test`) and skip themselves if MongoDB isn't running. |
 
 ---
 
@@ -129,6 +129,28 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 | `openSections` | `[Number]` | Which sheet section IDs are expanded in UI (e.g. `[1,2,3]`). |
 
 **User-level fields:** `email` (unique, normalized), `passwordHash`, optional `name`, Mongoose `timestamps` (`createdAt`, `updatedAt`).
+
+**`stats` subdocument** (denormalized, rewritten on every `PUT /api/progress`; lets other users' summaries be read without loading progress):
+
+| Field | Meaning |
+|-------|---------|
+| `totalSolved`, `easy`, `medium`, `hard` | Unique LeetCode problems done (sheet + practice). |
+| `lastCheckin` | Latest `YYYY-MM-DD` in `progress.streak.checkins`, or `null`. |
+| `updatedAt` | When stats were last computed. |
+
+**`solvesSyncedAt`** (`Date | null`): set once the user's pre-existing progress has been backfilled into `solves` (§5.3). `null` means "not yet" — the next progress save does it.
+
+### 5.3 Solve schema (weekly leaderboard source)
+
+- **File:** `server/src/models/Solve.js` — **exports** `Solve`. Written only by `server/src/lib/solves.js`.
+- One document per **(user, LeetCode problem)**, unique index `{ userId, lcNumber }`; second index `{ userId, solvedAt }` for weekly queries.
+
+| Field | Meaning |
+|-------|---------|
+| `lcNumber`, `difficulty`, `points` | Problem and its points (5 / 10 / 15), fixed when first recorded. |
+| `solvedAt` | First time it was marked done. **Never moves** — unticking and re-ticking keeps it. |
+| `active` | `false` while the problem is unticked; re-ticking reactivates the same document. |
+| `source` | `live` = ticked while tracking existed (counts toward its week). `backfill` = already done before tracking (never counts toward a week; `solvedAt` = account `createdAt`). |
 
 ---
 
@@ -180,9 +202,20 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 | Method | Path | Behavior |
 |--------|------|----------|
 | `GET` | `/` | `User.findById(req.user.sub).select('progress')` → `{ progress }`. |
-| `PUT` | `/` | Validates optional arrays/objects. Merges into `user.progress` only for fields present in body (`sheetDone`, `practiceDone`, `streak.checkins`, `openSections`). `markModified('progress')` + `save()`. Returns `{ progress }`. |
+| `PUT` | `/` | Validates optional arrays/objects. Merges into `user.progress` only for fields present in body (`sheetDone`, `practiceDone`, `sheetSaved`, `practiceSaved`, `streak.checkins`, `openSections`). Recomputes `user.stats`, `markModified('progress')` + `save()`, then **`syncSolves`** (below). Returns `{ progress }`. Errors → **500** `{ error }`. |
 
-**Note:** Partial updates still **replace** whole arrays when that field is sent (not a Mongo `$push` patch for single items).
+**Note:** Partial updates still **replace** whole arrays when that field is sent (not a Mongo `$push` patch for single items). The client contract is unchanged by solve tracking — the server works out what was newly solved itself.
+
+### 6.5 Solve tracking (`server/src/lib/solves.js`)
+
+| Function | Role |
+|----------|------|
+| `diffSolves(before, after)` | Pure: `{ added, removed }` between two sets of LeetCode numbers. |
+| `computeStats(lcSet, checkins, now)` | Pure: the `user.stats` object. |
+| `backfillSolves(user, lcSet)` | Records already-done problems as `source: 'backfill'` (never count toward a week) and sets `solvesSyncedAt`. Idempotent. Will be reused by the Phase 7 migration. |
+| `syncSolves(user, before, after, now)` | Called after every progress save. Backfills first if `solvesSyncedAt` is null, then **reconciles against the user's existing solve documents** (not the previous progress): new problems are upserted as `live` with `solvedAt = now`; removed ones get `active: false`. Upserts use `$setOnInsert`, so a re-ticked problem keeps its original `solvedAt` and `source`. |
+
+Failure handling: progress is saved first. If `syncSolves` throws, the error is logged and the request still succeeds; because it reconciles against the `solves` collection, the next save repairs the gap.
 
 ---
 

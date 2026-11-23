@@ -49,6 +49,19 @@ const noteSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/** Denormalized from progress on every save, so other users' summaries need no extra queries. */
+const statsSchema = new mongoose.Schema(
+  {
+    totalSolved: { type: Number, default: 0 },
+    easy: { type: Number, default: 0 },
+    medium: { type: Number, default: 0 },
+    hard: { type: Number, default: 0 },
+    lastCheckin: { type: String, default: null },
+    updatedAt: { type: Date, default: null }
+  },
+  { _id: false }
+);
+
 const skillSchema = new mongoose.Schema(
   {
     name: { type: String, trim: true, maxlength: 80, required: true }
@@ -71,6 +84,9 @@ const userSchema = new mongoose.Schema(
     passwordResetTokenHash: { type: String, default: null },
     passwordResetExpires: { type: Date, default: null },
     progress: { type: progressSchema, default: () => ({}) },
+    stats: { type: statsSchema, default: () => ({}) },
+    /** Set once this user's pre-existing progress has been backfilled into `solves`. */
+    solvesSyncedAt: { type: Date, default: null },
     resume: { type: resumeSchema, default: null },
     avatar: { type: avatarSchema, default: () => ({ presetIndex: 0 }) },
     notes: { type: [noteSchema], default: [] },
