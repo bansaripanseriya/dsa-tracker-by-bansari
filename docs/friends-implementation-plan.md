@@ -12,7 +12,7 @@ Design canvas: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3
 | 1. Shared data & unique counting | **Done** (2026-11-24) | See "Phase 1 — what shipped" below. |
 | 2. Solve tracking | **Done** (2026-11-24) | See "Phase 2 — what shipped" below. |
 | 3. Identity | **Done** (2026-11-24) | See "Phase 3 — what shipped" below. |
-| 4. Friendships & search API | Not started | |
+| 4. Friendships & search API | **Done** (2026-11-24) | See "Phase 4 — what shipped" below. |
 | 5. Leaderboard API | Not started | |
 | 6. Frontend | Not started | |
 | 7. Migration, seed, rollout | Not started | |
@@ -185,6 +185,24 @@ Design canvas: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3
 9. **`index.js`:** mount `/api/users` and `/api/friends`; `app.set('trust proxy', 1)` so per-IP limits work behind Render's proxy.
 
 **Done when:** with seeded users you can, via curl: find by `#tag`, by full email, by fuzzy name (`rohn` → Rohan), and a user who switched name search off is not found by name; send / cancel / decline / accept; crossing requests become friends; a non-friend profile returns 404; no response ever contains another user's email or `_id`.
+
+### Phase 4 — what shipped
+
+- Dependencies: `express-rate-limit@8`, `validator@13` (explicit).
+- `models/Friendship.js`; `lib/friendships.js` (state machine + read helpers, `FriendError`); `lib/cards.js` (`publicCard` / `memberCard` / `friendSummary`); `lib/profile.js` (`buildFriendProfile`); `lib/search.js` (`searchUsers`); `middleware/rateLimits.js`; `authOptional`; `routes/friends.js`; `routes/users.js` gained `by-tag`, `avatar` and `search`; `index.js` mounts `/api/friends` and trusts one proxy hop.
+- `shared/streak.js` with `calcStreak(checkins, today)`, `istDateStr`, `addDays`; the client re-exports `calcStreak` from it.
+- **Changed from the plan:**
+  - Search returns **200** with `reason: 'invalid-tag' | 'partial-email' | 'too-short'` instead of a 400, so the UI just shows a hint.
+  - Only `calcStreak` moved to `shared/` (that's all the server needs); the rest of `client/src/utils/streak.js` stays client-side.
+  - Search also returns one-typo **close** matches after exact ones (e.g. `rohan` → Rohan Das, Rohan Iyer, then Rohini as "close").
+  - Name search ranks candidates by trigram overlap inside MongoDB before the 50-candidate cap, so common prefixes don't push the best matches out.
+- **Added (not in the plan):**
+  - `GET /api/users/by-tag/:tag/avatar` — cards carry `avatar.photoUrl` instead of base64 photos, so lists stay small; raster types only (an SVG on our origin could run scripts), `nosniff`, `default-src 'none'`.
+  - `ensureStats` (on `/auth/me` and for accounts found by email) so friends see correct solved counts for accounts that haven't saved progress since Phase 2.
+  - The friend profile 404 is identical for unknown tags and non-friends.
+- Weekly **rank** on the friend profile is left for Phase 5 (it needs the leaderboard).
+- Tests (62 total): `cards.test.js` (no email / id / private data in any card), `streak.test.js`, `friendships.db.test.js` (request → accept → unfriend, crossing requests, decline/cancel then re-request, self, racing requests, bulk relationships, profile week boundaries), `search.db.test.js` (tag, email normalization, partial email, hidden users, fuzzy ranking, no leaks, untagged account found by email).
+- Verified end to end over HTTP with the seeded users, including a scan of every response for emails, ids and private fields (none).
 
 ---
 

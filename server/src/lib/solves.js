@@ -1,6 +1,6 @@
 import { Solve } from '../models/Solve.js';
 import { User } from '../models/User.js';
-import { LC_INFO, countByDifficulty } from '../../../shared/problemIndex.js';
+import { LC_INFO, countByDifficulty, lcSetFromKeys } from '../../../shared/problemIndex.js';
 import { pointsFor } from '../../../shared/scoring.js';
 
 /**
@@ -26,6 +26,20 @@ export function computeStats(lcSet, checkins = [], now = new Date()) {
     lastCheckin: sorted.length ? sorted[sorted.length - 1] : null,
     updatedAt: now
   };
+}
+
+/**
+ * Make sure `user.stats` exists. Accounts that haven't saved progress since stats were
+ * introduced get them computed from their stored progress (the user document must have
+ * `progress` loaded). Returns the stats.
+ */
+export async function ensureStats(user) {
+  if (user.stats?.updatedAt) return user.stats;
+  const progress = user.progress || {};
+  const stats = computeStats(lcSetFromKeys(progress.sheetDone, progress.practiceDone), progress.streak?.checkins);
+  await User.updateOne({ _id: user._id }, { $set: { stats } });
+  user.stats = stats;
+  return stats;
 }
 
 /**

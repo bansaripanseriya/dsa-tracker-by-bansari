@@ -7,6 +7,7 @@ import { User } from '../models/User.js';
 import { authRequired } from '../middleware/auth.js';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../lib/mail.js';
 import { ensureFriendTag, selfDiscoverability, selfUser } from '../lib/identity.js';
+import { ensureStats } from '../lib/solves.js';
 
 const router = Router();
 
@@ -243,12 +244,13 @@ router.post(
 
 router.get('/me', authRequired, async (req, res) => {
   try {
-    const user = await User.findById(req.user.sub).select('email name progress resume avatar skills friendTag discoverability');
+    const user = await User.findById(req.user.sub).select('email name progress resume avatar skills friendTag discoverability stats');
     if (!user) {
       return res.status(401).json({ error: 'Invalid session. Please log in again.' });
     }
-    // Existing accounts get their friend tag the first time they load the app.
+    // Existing accounts get their friend tag (and summary stats) the first time they load the app.
     await ensureFriendTag(user);
+    await ensureStats(user);
     res.json({
       user: selfUser(user),
       discoverability: selfDiscoverability(user),

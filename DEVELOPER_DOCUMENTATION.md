@@ -160,6 +160,20 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 | `active` | `false` while the problem is unticked; re-ticking reactivates the same document. |
 | `source` | `live` = ticked while tracking existed (counts toward its week). `backfill` = already done before tracking (never counts toward a week; `solvedAt` = account `createdAt`). |
 
+### 5.4 Friendship schema
+
+- **File:** `server/src/models/Friendship.js` — **exports** `Friendship`. Written only by `server/src/lib/friendships.js`.
+- **One document per pair of users**: `userA` < `userB` (sorted as strings) with a unique index on `{ userA, userB }`, so two people requesting each other can never create two documents.
+
+| Field | Meaning |
+|-------|---------|
+| `requestedBy` | Who sent the request. |
+| `status` | `pending` or `accepted`. |
+| `acceptedAt` | When it became a friendship. |
+| `createdAt`, `updatedAt` | Mongoose timestamps. |
+
+Declining, cancelling and unfriending **delete** the document (nobody is notified; no cooldown).
+
 ---
 
 ## 6. Backend API — routes, middleware, and what each function does
@@ -175,6 +189,9 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 | `GET /api/health` | Simple `{ ok: true }` health check. |
 | `app.use('/api/auth', authRoutes)` | Auth endpoints. |
 | `app.use('/api/progress', progressRoutes)` | Progress endpoints (all protected). |
+| `app.use('/api/users', userRoutes)` | Tag lookup, people search, discoverability (§6.6, §6.7). |
+| `app.use('/api/friends', friendRoutes)` | Friend requests, friends list, friend profiles (§6.7). |
+| `app.set('trust proxy', 1)` | Render and Vite's dev proxy sit in front of Express; trusting one hop lets the per-IP rate limits see the real client. |
 | Production static | Serves `client/dist` and `sendFile(index.html)` for client routes. |
 | `main()` | Async: `await connectDb()`, then `listen`. |
 
@@ -183,6 +200,16 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 | Function | Behavior |
 |----------|----------|
 | `authRequired(req, res, next)` | Reads `Authorization: Bearer <token>`. Missing → **401**. Verifies JWT with `JWT_SECRET`. Invalid → **401**. Valid → sets `req.user` to decoded payload (`sub` = user id) and `next()`. |
+| `authOptional(req, res, next)` | Same token check, but never rejects: sets `req.user` when the token is valid, otherwise continues anonymously. Used by the public tag lookup (invite page). |
+
+**Rate limits** (`server/src/middleware/rateLimits.js`, `express-rate-limit`, 1-minute windows, **429** `{ error, code: 'rate-limited' }`):
+
+| Limiter | Limit | Keyed by | Used on |
+|---------|-------|----------|---------|
+| `tagLookupLimiter` | 60 | IP | `GET /api/users/by-tag/:tag` |
+| `avatarLimiter` | 300 | IP | `GET /api/users/by-tag/:tag/avatar` |
+| `searchLimiter` | 30 | user | `GET /api/users/search` |
+| `friendWriteLimiter` | 30 | user | sending / accepting / removing requests, unfriending |
 
 ### 6.3 Auth routes (`server/src/routes/auth.js`)
 
@@ -241,11 +268,60 @@ Failure handling: progress is saved first. If `syncSolves` throws, the error is 
 | `ensureFriendTag(user)` | Assigns a tag (and builds `nameSearch`) only if the user has none — conditional update on `friendTag: null`, retried on the rare duplicate. Safe under concurrent requests. |
 | `selfUser(user)`, `selfDiscoverability(user)` | The signed-in user's own `{ id, email, name, friendTag }` and `{ byName }`. |
 
+### 6.7 Friends API — `routes/users.js`, `routes/friends.js` and their libraries
+
+**Who sees what** is decided in one place, `server/src/lib/cards.js`. Routes never send another user's document directly:
+
+| Function | Audience | Fields |
+|----------|----------|--------|
+| `publicCard(user)` | anyone, even signed out | `tag`, `name` (may be `''` — clients then show the tag), `avatar { presetIndex, photoUrl }` |
+| `memberCard(user)` | any signed-in user | + `totalSolved` |
+| `friendSummary(user, { since, today })` | friends list | + `solved { easy, medium, hard }`, `streak` (current), `lastCheckin`, `friendsSince` |
+| `buildFriendProfile(friend, …)` (`lib/profile.js`) | a friend's profile | + `solved` with `outOf` totals, `streak { current, best, activeDays }`, `checkins` (last 26 weeks), `thisWeek { start, end, points, easy, medium, hard }`, `recentSolves` (last 10 live) |
+
+Never included anywhere: email, Mongo `_id`, notes, resume, raw progress keys, avatar image data. `CARD_FIELDS` is the `.select()` string for loading users for cards. Avatar photos are served by their own URL so lists stay small.
+
+**`lib/friendships.js`** — the request state machine (throws `FriendError(code, status)` for expected failures):
+
+| Function | Behavior |
+|----------|----------|
+| `sendRequest(me, target)` | none → create pending (`created: true`) · pending by me → no change · pending by them → **accept** (requests crossed) · already friends → `already-friends` 409 · yourself → `self` 400. Limits: 200 friends (`friend-limit` / `their-friend-limit` 409), 50 pending outgoing (`too-many-pending` 429). Retries if two requests race on the unique pair index. |
+| `acceptRequest(me, other)` | Only the receiver of a pending request; else `no-request` 404. |
+| `removeRequest(me, other)` | Decline (incoming) or cancel (outgoing); deletes the pending document. |
+| `unfriend(me, other)` | Deletes the accepted document; else `not-friends` 404. |
+| `relationship`, `relationshipsWith`, `acceptedFriendships`, `friendIds`, `pendingRequests`, `countPendingIncoming`, `friendsSince` | Read helpers. Relationship values: `self`, `none`, `outgoing`, `incoming`, `friends`. |
+
+**`lib/search.js` — `searchUsers(me, q)`** returns `{ mode, results, reason? }`; each result is a `memberCard` + `relationship` + `matchType`:
+
+| Input | Mode | Rule |
+|-------|------|------|
+| Starts with `#` | `tag` | Exact (`parseTagInput`). Malformed → `reason: 'invalid-tag'`. A 7-letter word **without** `#` is a name search. |
+| Contains `@` | `email` | Only a complete address (`validator.isEmail`), normalized with `validator.normalizeEmail` — the same as registration, so Gmail dots/`+suffix` match. Otherwise `reason: 'partial-email'`. Gives the found account a tag/stats if it doesn't have them yet. |
+| Anything else | `name` | 2+ characters (else `reason: 'too-short'`). Candidates: word-prefix or shared trigrams, excluding yourself, users without a tag, and users with `discoverability.byName: false`; top 50 by trigram overlap, then ranked with `scoreName`. `matchType: 'close'` for one-typo matches (listed after exact ones). Max 10 results. |
+
 **`routes/users.js`** (mounted at `/api/users`):
 
 | Method | Path | Behavior |
 |--------|------|----------|
-| `PUT` | `/me/discoverability` | `authRequired`. Body `{ byName: boolean }` (**400** otherwise). Returns `{ discoverability }`. Search and tag lookup arrive in Phase 4. |
+| `GET` | `/by-tag/:tag` | `authOptional` + per-IP limit. Signed out → `{ user: publicCard }`; signed in → `{ user: memberCard, relationship }`. Unknown tag → **404**. Powers the invite page. |
+| `GET` | `/by-tag/:tag/avatar` | The uploaded photo as an image (PNG/JPEG/WebP/GIF only — no SVG, which could run scripts on our origin), `nosniff` + `default-src 'none'` CSP, cached a day (`?v=` changes with each upload). **404** if no photo. |
+| `GET` | `/search?q=` | `authRequired` + per-user limit. `searchUsers` above. |
+| `PUT` | `/me/discoverability` | `authRequired`. Body `{ byName: boolean }` (**400** otherwise). Returns `{ discoverability }`. |
+
+**`routes/friends.js`** (mounted at `/api/friends`, all `authRequired`; people are addressed by tag, with or without `#`; errors are `{ error, code }`):
+
+| Method | Path | Behavior |
+|--------|------|----------|
+| `GET` | `/` | `{ friends: friendSummary[] }`, sorted by name. |
+| `GET` | `/requests` | `{ incoming, outgoing }` — `memberCard` + `requestedAt`. |
+| `GET` | `/summary` | `{ pendingIncoming }` for the header badge. |
+| `POST` | `/requests` | Body `{ tag }` → `sendRequest`. **201** when a request was created, **200** otherwise. Returns `{ status: 'pending'|'accepted', relationship, user }`. |
+| `POST` | `/requests/:tag/accept` | Accept their request → `{ status: 'accepted', relationship: 'friends', user }`. |
+| `DELETE` | `/requests/:tag` | Decline or cancel → `{ status: 'removed', relationship: 'none' }`. |
+| `GET` | `/:tag/profile` | `{ profile }` for a friend. **404** `not-found` for non-friends *and* unknown tags alike, so strangers can't confirm someone exists. Weekly rank comes with the leaderboard (Phase 5). |
+| `DELETE` | `/:tag` | Unfriend. |
+
+`/auth/me` also calls `ensureStats` (`lib/solves.js`), so accounts that haven't saved progress since stats were introduced still show correct solved counts to friends.
 
 ---
 
@@ -442,7 +518,7 @@ Thin client wrapper over `shared/problemIndex.js` (§11.3).
 | `dsaTodayStr()` | Local calendar date `YYYY-MM-DD`. |
 | `countCheckinsCurrentWeek(checkins)` | How many distinct check-in dates fall in current Sun–Sat week. |
 | `appendTodayIfMissing(checkins)` | Sorted list including today once. |
-| `calcStreak(checkins)` | `{ current, best, total }` — consecutive days ending today for `current`; longest run for `best`. |
+| `calcStreak(checkins)` | Re-exported from `shared/streak.js` (§11.5): `{ current, best, total }` — consecutive days ending today (browser's local date) for `current`; longest run for `best`. |
 | `yearCheckinDates(checkins, year)` | Filter/sort dates for one year. |
 | `maxStreakInYear(sortedDates)` | Longest consecutive run within that sorted list. |
 | `yearActivityStats(checkins, year)` | `{ activeDays, maxStreak }`. |
@@ -511,6 +587,15 @@ For the upcoming weekly leaderboard (see `docs/friends-implementation-plan.md`).
 | `POINTS`, `pointsFor(difficulty)` | Easy 5, Medium 10, Hard 15. |
 | `IST_OFFSET_MS` | UTC+5:30 (India has no daylight saving). |
 | `weekRangeIST(now, offset)` | `{ start, end }` of the leaderboard week: Monday 00:00 IST to the next Monday 00:00 IST, `offset` weeks back. |
+
+### 11.5 `shared/streak.js`
+
+| Export | Role |
+|--------|------|
+| `localDateStr(date)` | `YYYY-MM-DD` in the machine's local zone (what the browser records as a check-in). |
+| `istDateStr(now)` | `YYYY-MM-DD` in IST — the server's "today" (friend profiles, friends list). |
+| `addDays(dateStr, n)` | Calendar arithmetic on date strings. |
+| `calcStreak(checkins, today = localDateStr())` | `{ current, best, total }`; duplicates and non-strings ignored. The client passes nothing (local today); the server passes `istDateStr()`. |
 
 ---
 
