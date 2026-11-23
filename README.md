@@ -167,6 +167,7 @@ At root:
 - `npm run build` -> builds frontend app
 - `npm run seed` -> creates/resets demo accounts in a local database
 - `npm test` -> runs the unit tests (`server/test`, Node's built-in test runner)
+- `npm run migrate:friends -- --dry-run` -> shows what the one-time friends migration would change (drop `--dry-run` to apply; a non-local database also needs `--yes`). See the rollout runbook in `docs/friends-implementation-plan.md`.
 
 In `server/`:
 

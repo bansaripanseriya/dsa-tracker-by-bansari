@@ -15,7 +15,7 @@ Design canvas: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3
 | 4. Friendships & search API | **Done** (2026-11-24) | See "Phase 4 — what shipped" below. |
 | 5. Leaderboard API | **Done** (2026-11-24) | See "Phase 5 — what shipped" below. |
 | 6. Frontend | **Done** (2026-11-24) | See "Phase 6 — what shipped" below. |
-| 7. Migration, seed, rollout | Partly done | Seed finished early (phases 3 and 5); migration script and rollout remain. |
+| 7. Migration, seed, rollout | **Done** (2026-11-24) | Migration script, tests and rollout runbook — see "Phase 7 — what shipped". Deploying is up to you. |
 
 ---
 
@@ -271,6 +271,28 @@ Map each screen to its canvas board.
    1. Deploy Phases 1–5 (backwards compatible; UI unchanged except unique counting).
    2. Run the migration once (Render shell: `npm run migrate:friends --prefix server`).
    3. Deploy Phase 6 (UI).
+
+### Phase 7 — what shipped
+
+- `server/src/lib/migrateFriends.js` (`migrateFriends({ dryRun, log })`) and `server/scripts/migrate-friends.js`; `npm run migrate:friends` at the root or in `server/`.
+- Per user, **only what's missing is filled in**: friend tag (never replaced), name search index, `discoverability.byName: true` (an existing `false` is respected), sheet ticks expanded to every section (only `progress.sheetDone` is written, so a concurrent progress save isn't overwritten), backfilled solve history (`source: 'backfill'`, never scores), stats. It also creates the indexes up front.
+- **`--dry-run`** reports what would change and writes nothing. Against a **non-local** database it refuses to write without **`--yes`**, and the connection string's credentials are masked in all output.
+- **Changed from the plan:** the rollout no longer needs separate deploys. Every migration step also happens lazily (tags on `/auth/me`, backfill on the next progress save, stats on `/auth/me`), so deploying everything at once is safe; the migration just completes it for every account, including people who don't log in.
+- Tests (69 total): `migrateFriends.db.test.js` — old-shaped accounts get everything, the dry run writes nothing, an opt-out is respected, a second run changes nothing (same tags, no duplicate solves), a tagged account missing its name index gets one.
+- Verified locally: dry run → run → re-run (all zeros); the migrated account was found by name search with the correct unique count; the non-local guard refused without `--yes`.
+
+### Rollout runbook
+
+1. **Merge** `feature/friends` into `main` and let Render deploy it (`render.yaml`: `npm run install:all && npm run build`, then `npm start --prefix server`). No new environment variables. Invite links (`/friends/add/…`) work in production because Express already serves `index.html` for every non-`/api` path.
+2. **Smoke test:** `GET /api/health` → `{ ok: true }`; log in; the Sheet shows "1677 problems"; the Friends tab loads.
+3. **Dry-run the migration** against production and read the counts:
+   - with Render Shell (if your plan includes it): `npm run migrate:friends --prefix server -- --dry-run`
+   - or from your machine (an exported variable wins over `.env`):
+     `MONGODB_URI='<production connection string>' npm run migrate:friends -- --dry-run`
+4. **Run it:** the same command with `--yes` instead of `--dry-run`. Safe to re-run if interrupted.
+5. **Check:** run the dry run again — every count should be `0`.
+
+**Rolling back:** redeploy the previous commit. The new fields (`friendTag`, `stats`, `nameSearch`, `discoverability`, `solvesSyncedAt`) and collections (`solves`, `friendships`) are ignored by the old code, so nothing needs undoing. The one visible difference for users would be that a problem ticked in one section stays ticked in all its sections.
 
 ---
 
