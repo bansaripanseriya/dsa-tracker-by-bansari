@@ -7,6 +7,7 @@ import cors from 'cors';
 import { connectDb } from './config/db.js';
 import authRoutes from './routes/auth.js';
 import progressRoutes from './routes/progress.js';
+import userRoutes from './routes/users.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Load `.env` from repository root (parent of `server/`), not `server/.env`
@@ -40,6 +41,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/users', userRoutes);
 
 if (process.env.NODE_ENV === 'production') {
   const distCandidates = [

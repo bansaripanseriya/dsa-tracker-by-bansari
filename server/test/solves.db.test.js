@@ -1,36 +1,16 @@
 /**
- * Integration tests for solve tracking against a real MongoDB.
- * Uses MONGODB_URI_TEST, or a throwaway local `dsa-tracker-test` database.
- * Skipped automatically when no MongoDB is reachable.
+ * Integration tests for solve tracking against a real MongoDB
+ * (throwaway `dsa-tracker-test-solves` database; skipped if MongoDB isn't running).
  */
-import { after, before, test } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import mongoose from 'mongoose';
 import { User } from '../src/models/User.js';
 import { Solve } from '../src/models/Solve.js';
 import { syncSolves } from '../src/lib/solves.js';
+import { useTestDb } from './helpers/db.js';
 
-const URI = process.env.MONGODB_URI_TEST || 'mongodb://127.0.0.1:27017/dsa-tracker-test';
-let connected = false;
-
-before(async () => {
-  try {
-    await mongoose.connect(URI, { serverSelectionTimeoutMS: 1500 });
-  } catch {
-    return;
-  }
-  if (!mongoose.connection.name.endsWith('-test')) {
-    throw new Error(`Refusing to run DB tests against "${mongoose.connection.name}" — the database name must end in -test.`);
-  }
-  await mongoose.connection.dropDatabase();
-  await Solve.syncIndexes();
-  connected = true;
-});
-
-after(async () => {
-  if (connected) await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-});
+const db = useTestDb('solves', [User, Solve]);
+const connected = () => db.connected;
 
 const T0 = new Date('2026-10-01T00:00:00Z'); // account created
 const T1 = new Date('2026-11-24T05:00:00Z');
@@ -49,7 +29,7 @@ async function solveOf(user, lcNumber) {
 }
 
 test('first sync backfills earlier progress; new ticks are live', async (t) => {
-  if (!connected) return t.skip('no local MongoDB');
+  if (!connected()) return t.skip('no local MongoDB');
   let user = await freshUser('first@example.com');
 
   // Had Two Sum (1) and Is Subsequence (392) before tracking; now also ticks Trapping Rain Water (42).
@@ -70,7 +50,7 @@ test('first sync backfills earlier progress; new ticks are live', async (t) => {
 });
 
 test('unticking deactivates; re-ticking keeps the original solvedAt and source', async (t) => {
-  if (!connected) return t.skip('no local MongoDB');
+  if (!connected()) return t.skip('no local MongoDB');
   let user = await freshUser('retick@example.com');
   await syncSolves(user, new Set([1]), new Set([1, 42]), T1);
   user = await User.findById(user._id);
@@ -93,7 +73,7 @@ test('unticking deactivates; re-ticking keeps the original solvedAt and source',
 });
 
 test('a missed sync is repaired by the next save', async (t) => {
-  if (!connected) return t.skip('no local MongoDB');
+  if (!connected()) return t.skip('no local MongoDB');
   let user = await freshUser('repair@example.com');
   await syncSolves(user, new Set(), new Set([1]), T1);
   user = await User.findById(user._id);
@@ -106,7 +86,7 @@ test('a missed sync is repaired by the next save', async (t) => {
 });
 
 test('running sync twice with the same data changes nothing', async (t) => {
-  if (!connected) return t.skip('no local MongoDB');
+  if (!connected()) return t.skip('no local MongoDB');
   let user = await freshUser('idempotent@example.com');
   await syncSolves(user, new Set(), new Set([1, 42]), T1);
   user = await User.findById(user._id);

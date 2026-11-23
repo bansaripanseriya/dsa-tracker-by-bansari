@@ -93,7 +93,8 @@ npm run dev                 # API on :4000, app on http://localhost:5173
 ```
 
 Demo accounts created by `npm run seed` (password `password123` for all):
-`aditi@example.com`, `priya@example.com`, `rohan@example.com`, `kabir@example.com`.
+`aditi@example.com`, `priya@example.com`, `rohan@example.com`, `kabir@example.com`,
+`kavya@example.com` (hidden from name search). Each has a fixed friend tag, printed by the seed.
 The seed only runs against a local database unless you pass `--force`.
 
 ---

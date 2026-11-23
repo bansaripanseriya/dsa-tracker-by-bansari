@@ -37,7 +37,7 @@ function SectionCard({ id, title, subtitle, children }) {
 }
 
 export default function Profile() {
-  const { user, avatar, setAvatar } = useAuth();
+  const { user, avatar, setAvatar, updateName } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') === 'security-media' ? 'security-media' : 'personal';
   const [selectedAvatarIndex, setSelectedAvatarIndex] = useState(() => {
@@ -59,7 +59,46 @@ export default function Profile() {
     return user.email?.split('@')[0] || 'User';
   }, [user]);
 
-  const username = useMemo(() => (user?.email ? user.email.split('@')[0] : ''), [user?.email]);
+  // Public identity for the friends feature. Never derive anything public from the email.
+  const tagLabel = user?.friendTag ? `#${user.friendTag}` : '';
+  const [tagCopied, setTagCopied] = useState(false);
+
+  const [nameDraft, setNameDraft] = useState(user?.name || '');
+  const [nameStatus, setNameStatus] = useState({ kind: '', text: '' });
+  const [savingName, setSavingName] = useState(false);
+  useEffect(() => {
+    setNameDraft(user?.name || '');
+  }, [user?.name]);
+  const trimmedName = nameDraft.trim();
+  const nameChanged = trimmedName !== (user?.name || '').trim();
+  const nameValid = trimmedName.length >= 1 && trimmedName.length <= 120;
+
+  async function handleSaveName() {
+    if (!nameChanged || !nameValid) return;
+    setSavingName(true);
+    setNameStatus({ kind: '', text: '' });
+    try {
+      await updateName(trimmedName);
+      setNameStatus({ kind: 'ok', text: 'Name saved.' });
+    } catch (error) {
+      const msg = error?.response?.data?.errors?.[0]?.msg || error?.response?.data?.error || 'Could not save your name. Try again.';
+      setNameStatus({ kind: 'error', text: msg });
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  async function handleCopyTag() {
+    if (!tagLabel) return;
+    try {
+      await navigator.clipboard.writeText(tagLabel);
+      setTagCopied(true);
+      setTimeout(() => setTagCopied(false), 2000);
+    } catch {
+      setTagCopied(false);
+    }
+  }
+
   const selectedAvatarSrc = uploadedAvatarSrc || AVATAR_IMAGES[selectedAvatarIndex] || '';
   const sideNavLinks = activeTab === 'security-media' ? PROFILE_SECURITY_LINKS : PROFILE_SECTION_LINKS;
 
@@ -253,7 +292,11 @@ export default function Profile() {
             </div>
             <div>
               <h2>{displayName}</h2>
-              <p>@{username || 'username'}</p>
+              {tagLabel ? (
+                <p className="profile-user-tag" title="Your friend tag">
+                  {tagLabel}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -407,11 +450,27 @@ export default function Profile() {
                   <div className="profile-form-grid">
                     <label>
                       Full Name
-                      <input defaultValue={displayName} placeholder="Full name" />
+                      <input
+                        value={nameDraft}
+                        maxLength={120}
+                        placeholder="Full name"
+                        onChange={(e) => {
+                          setNameDraft(e.target.value);
+                          setNameStatus({ kind: '', text: '' });
+                        }}
+                      />
                     </label>
                     <label>
-                      Username
-                      <input defaultValue={username} placeholder="Username" />
+                      Friend tag
+                      <span className="profile-tag-field">
+                        <input value={tagLabel} readOnly placeholder="Assigning…" aria-describedby="friend-tag-hint" />
+                        <button type="button" className="profile-btn secondary" onClick={handleCopyTag} disabled={!tagLabel}>
+                          {tagCopied ? 'Copied' : 'Copy'}
+                        </button>
+                      </span>
+                      <span id="friend-tag-hint" className="profile-field-hint">
+                        Friends can add you with this. It never changes.
+                      </span>
                     </label>
                     <label>
                       Phone Number
@@ -425,6 +484,21 @@ export default function Profile() {
                       Bio
                       <textarea rows={4} placeholder="Enter bio" />
                     </label>
+                  </div>
+                  <div className="profile-name-actions">
+                    <button
+                      type="button"
+                      className="profile-btn primary"
+                      onClick={handleSaveName}
+                      disabled={!nameChanged || !nameValid || savingName}
+                    >
+                      {savingName ? 'Saving…' : 'Save name'}
+                    </button>
+                    {nameStatus.text ? (
+                      <p role="status" className={nameStatus.kind === 'error' ? 'profile-upload-error' : 'profile-upload-hint'}>
+                        {nameStatus.text}
+                      </p>
+                    ) : null}
                   </div>
                 </SectionCard>
 

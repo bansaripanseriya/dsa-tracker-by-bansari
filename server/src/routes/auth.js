@@ -6,6 +6,7 @@ import { body, validationResult } from 'express-validator';
 import { User } from '../models/User.js';
 import { authRequired } from '../middleware/auth.js';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../lib/mail.js';
+import { ensureFriendTag, selfDiscoverability, selfUser } from '../lib/identity.js';
 
 const router = Router();
 
@@ -121,10 +122,11 @@ router.post(
       }
       const passwordHash = await bcrypt.hash(password, 12);
       const user = await User.create({ email, passwordHash, name });
+      await ensureFriendTag(user);
       const token = signToken(user._id.toString(), secret);
       res.status(201).json({
         token,
-        user: { id: user._id, email: user.email, name: user.name }
+        user: selfUser(user)
       });
     } catch (error) {
       console.error('POST /api/auth/register failed:', error);
@@ -153,7 +155,7 @@ router.post(
       const token = signToken(user._id.toString(), secret);
       res.json({
         token,
-        user: { id: user._id, email: user.email, name: user.name }
+        user: selfUser(user)
       });
     } catch (error) {
       console.error('POST /api/auth/login failed:', error);
@@ -241,12 +243,15 @@ router.post(
 
 router.get('/me', authRequired, async (req, res) => {
   try {
-    const user = await User.findById(req.user.sub).select('email name progress resume avatar skills');
+    const user = await User.findById(req.user.sub).select('email name progress resume avatar skills friendTag discoverability');
     if (!user) {
       return res.status(401).json({ error: 'Invalid session. Please log in again.' });
     }
+    // Existing accounts get their friend tag the first time they load the app.
+    await ensureFriendTag(user);
     res.json({
-      user: { id: user._id, email: user.email, name: user.name },
+      user: selfUser(user),
+      discoverability: selfDiscoverability(user),
       progress: user.progress || {},
       avatar: user.avatar
         ? {
@@ -272,6 +277,36 @@ router.get('/me', authRequired, async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch current user' });
   }
 });
+
+router.put(
+  '/profile',
+  authRequired,
+  [
+    body('name')
+      .isString()
+      .trim()
+      .isLength({ min: 1, max: 120 })
+      .withMessage('Name must be between 1 and 120 characters')
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+      const user = await User.findById(req.user.sub).select('email name friendTag');
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      user.name = req.body.name;
+      await user.save(); // pre-save hook rebuilds the name search index
+      return res.json({ user: selfUser(user) });
+    } catch (error) {
+      console.error('PUT /api/auth/profile failed:', error);
+      return res.status(500).json({ error: 'Failed to update profile' });
+    }
+  }
+);
 
 router.get('/skills-options', authRequired, async (_req, res) => {
   return res.json({ skills: SKILL_OPTIONS });

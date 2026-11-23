@@ -15,6 +15,7 @@ import bcrypt from 'bcryptjs';
 import { User } from '../src/models/User.js';
 import { Solve } from '../src/models/Solve.js';
 import { computeStats } from '../src/lib/solves.js';
+import { buildNameSearch } from '../src/lib/nameSearch.js';
 import { DATA } from '../../shared/data/problems.js';
 import { PRACTICE_DAYS } from '../../shared/data/practicePlan.js';
 import { TOTALS, expandSheetDone, lcSetFromKeys } from '../../shared/problemIndex.js';
@@ -26,11 +27,14 @@ const PASSWORD = 'password123';
 
 // sheet: how many sheet problems are ticked; practiceDays: practice days fully done;
 // streak: current consecutive check-in days ending today; history: extra random check-ins.
+// tag: fixed friend tag (same as the design mockups) so testing is predictable.
+// byName: false = hidden from name search (only findable by tag or exact email).
 const DEMO_USERS = [
-  { email: 'aditi@example.com', name: 'Aditi Verma', seed: 11, sheet: 198, practiceDays: 12, streak: 12, history: 70 },
-  { email: 'priya@example.com', name: 'Priya Sharma', seed: 23, sheet: 236, practiceDays: 20, streak: 21, history: 90 },
-  { email: 'rohan@example.com', name: 'Rohan Iyer', seed: 37, sheet: 301, practiceDays: 25, streak: 9, history: 110 },
-  { email: 'kabir@example.com', name: 'Kabir Singh', seed: 41, sheet: 142, practiceDays: 6, streak: 4, history: 40 }
+  { email: 'aditi@example.com', name: 'Aditi Verma', tag: 'A4TZ6HW', seed: 11, sheet: 198, practiceDays: 12, streak: 12, history: 70 },
+  { email: 'priya@example.com', name: 'Priya Sharma', tag: '7K3QX9P', seed: 23, sheet: 236, practiceDays: 20, streak: 21, history: 90 },
+  { email: 'rohan@example.com', name: 'Rohan Iyer', tag: 'R8M2VQA', seed: 37, sheet: 301, practiceDays: 25, streak: 9, history: 110 },
+  { email: 'kabir@example.com', name: 'Kabir Singh', tag: 'K9P3NXE', seed: 41, sheet: 142, practiceDays: 6, streak: 4, history: 40 },
+  { email: 'kavya@example.com', name: 'Kavya Reddy', tag: 'W6DM3XF', seed: 53, sheet: 177, practiceDays: 10, streak: 8, history: 60, byName: false }
 ];
 
 function isLocalUri(uri) {
@@ -117,6 +121,9 @@ async function main() {
           passwordHash,
           progress,
           stats: computeStats(done, progress.streak.checkins),
+          friendTag: u.tag,
+          discoverability: { byName: u.byName !== false },
+          nameSearch: buildNameSearch(u.name), // update queries skip the pre-save hook
           // Solve history is rebuilt (as backfill) on this user's next progress save.
           solvesSyncedAt: null,
           notes: [],
@@ -129,8 +136,8 @@ async function main() {
     await Solve.deleteMany({ userId: user._id });
     const solved = done.size;
     console.log(
-      `  ${u.email.padEnd(20)} ${String(solved).padStart(4)}/${TOTALS.all} solved · ` +
-        `${String(progress.practiceDone.length).padStart(3)} practice · ${u.streak}-day streak`
+      `  ${u.email.padEnd(20)} #${u.tag}  ${String(solved).padStart(4)}/${TOTALS.all} solved · ` +
+        `${u.streak}-day streak${u.byName === false ? ' · hidden from name search' : ''}`
     );
   }
 

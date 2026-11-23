@@ -309,6 +309,50 @@
   color: #0f4f4b;
 }
 
+.profile-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
+
+/* Friend tag (friends feature) */
+.profile-user-card p.profile-user-tag {
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 0.04em;
+}
+
+.profile-tag-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-tag-field input {
+  flex: 1;
+  min-width: 0;
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 0.05em;
+}
+
+.profile-field-hint {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.profile-name-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.profile-name-actions p {
+  margin: 0;
+}
+
 .profile-sec-head {
   display: flex;
   justify-content: space-between;

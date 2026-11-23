@@ -98,7 +98,7 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 
 | Command (repo root) | What it does |
 |---|---|
-| `npm run seed` | `server/scripts/seed.js` — creates/resets 4 demo users (`aditi@`, `priya@`, `rohan@`, `kabir@example.com`, password `password123`) with sheet, practice and streak data. Refuses to run against a non-local `MONGODB_URI` unless `--force`. |
+| `npm run seed` | `server/scripts/seed.js` — creates/resets 5 demo users (password `password123`) with sheet, practice and streak data and fixed friend tags: `aditi@` `#A4TZ6HW`, `priya@` `#7K3QX9P`, `rohan@` `#R8M2VQA`, `kabir@` `#K9P3NXE`, `kavya@example.com` `#W6DM3XF` (hidden from name search). Refuses to run against a non-local `MONGODB_URI` unless `--force`. |
 | `npm test` | Runs `node --test` in `server/` (built-in Node test runner, no dependencies). Tests live in `server/test/*.test.js`. `*.db.test.js` files use a throwaway `dsa-tracker-test` database (or `MONGODB_URI_TEST`; the name must end in `-test`) and skip themselves if MongoDB isn't running. |
 
 ---
@@ -139,6 +139,14 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 | `updatedAt` | When stats were last computed. |
 
 **`solvesSyncedAt`** (`Date | null`): set once the user's pre-existing progress has been backfilled into `solves` (§5.3). `null` means "not yet" — the next progress save does it.
+
+**Friends identity fields:**
+
+| Field | Meaning |
+|-------|---------|
+| `friendTag` | Public id, 7 chars from `23456789ABCDEFGHJKMNPQRSTUVWXYZ`, stored **without** `#`, shown **with** `#`. Unique sparse index. **No default** (a sparse index only skips documents that lack the field, so it must never be `null`). Assigned by `ensureFriendTag` (§6.6); permanent once set. |
+| `discoverability.byName` | `true` by default (opt-out). `false` hides the user from name search; tag and exact-email lookups always work. |
+| `nameSearch.tokens`, `nameSearch.trigrams` | Search index for `name` (§6.6). `select: false` — never loaded or sent unless asked for. Rebuilt by a `pre('save')` hook when `name` changes; **update queries skip that hook**, so set it explicitly with `buildNameSearch` there (the seed does). |
 
 ### 5.3 Solve schema (weekly leaderboard source)
 
@@ -191,7 +199,10 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 |--------|------|---------------------|
 | `POST` | `/register` | `express-validator`: email, password min 8, optional name. Hash password with `bcrypt.hash(..., 12)`. Reject duplicate email (**409**). Create `User`, return `{ token, user }` (**201**). |
 | `POST` | `/login` | Email + password. Compare with `bcrypt.compare`. Wrong credentials → **401**. Returns `{ token, user }`. |
-| `GET` | `/me` | Uses `authRequired`. Returns `{ user, progress }` from DB (progress may be empty object). |
+| `GET` | `/me` | Uses `authRequired`. Assigns a friend tag if the account has none yet (`ensureFriendTag`). Returns `{ user, discoverability, progress, avatar, resume, skills }`; `user` is `{ id, email, name, friendTag }`, `discoverability` is `{ byName }`. |
+| `PUT` | `/profile` | Uses `authRequired`. Body `{ name }`, trimmed, 1–120 chars (**400** otherwise). Saves via `save()` so the name search index is rebuilt. Returns `{ user }`. |
+
+`/register` assigns the friend tag immediately; `/login` returns the same `user` shape (`friendTag` may be `null` for an older account until its first `/me`).
 
 **JWT payload:** `{ sub: "<mongo user id>" }`.
 
@@ -217,6 +228,25 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 
 Failure handling: progress is saved first. If `syncSolves` throws, the error is logged and the request still succeeds; because it reconciles against the `solves` collection, the next save repairs the gap.
 
+### 6.6 Friends identity (`server/src/lib/tags.js`, `nameSearch.js`, `identity.js`) and `routes/users.js`
+
+| Function | Role |
+|----------|------|
+| `generateTag()` | Random 7-char tag via `crypto.randomInt`. |
+| `parseTagInput(input)` | `" #7k3 qx9p "` → `"7K3QX9P"`, or `null` if it isn't a valid tag. |
+| `formatTag(tag)` | `"#" + tag` — how tags are displayed. |
+| `normalizeName`, `tokensOf`, `trigramsOf`, `queryTrigramsOf` | Build the name search index. Stored trigrams pad both ends of each word (`" rohan "`); query trigrams pad only the front, because the user may still be typing. Letters of any script are kept. |
+| `buildNameSearch(name)` | `{ tokens, trigrams }` to store on the user. |
+| `scoreName(name, query)` | 4 = full name starts with it · 3 = a word starts with it · 2 = contains it (3+ chars) · 1 = one typo (4+ chars) · 0 = no match. Used by Phase 4 search. |
+| `ensureFriendTag(user)` | Assigns a tag (and builds `nameSearch`) only if the user has none — conditional update on `friendTag: null`, retried on the rare duplicate. Safe under concurrent requests. |
+| `selfUser(user)`, `selfDiscoverability(user)` | The signed-in user's own `{ id, email, name, friendTag }` and `{ byName }`. |
+
+**`routes/users.js`** (mounted at `/api/users`):
+
+| Method | Path | Behavior |
+|--------|------|----------|
+| `PUT` | `/me/discoverability` | `authRequired`. Body `{ byName: boolean }` (**400** otherwise). Returns `{ discoverability }`. Search and tag lookup arrive in Phase 4. |
+
 ---
 
 ## 7. Frontend — HTTP client and global state
@@ -231,7 +261,9 @@ Failure handling: progress is saved first. If `syncSolves` throws, the error is 
 
 | Export | Role |
 |--------|------|
-| `AuthProvider` | Holds `token`, `user`, `progress`, `loading`; syncs token with `localStorage`. |
+| `AuthProvider` | Holds `token`, `user` (`{ id, email, name, friendTag }`), `progress`, `avatar`, `discoverability` (`{ byName }`), `loading`; syncs token with `localStorage`. |
+| `updateName(name)` | `PUT /auth/profile`, then updates `user`. Throws on validation errors (the caller shows them). |
+| `updateDiscoverability(byName)` | `PUT /users/me/discoverability`, then updates `discoverability`. |
 | `loadSession(t)` | If no token: clears user/progress. Else `GET /auth/me`; on failure clears bad token. |
 | `login(email, password)` | `POST /auth/login`, stores token, sets state (effect loads session). |
 | `register(email, password, name)` | `POST /auth/register`, same. |
@@ -280,8 +312,10 @@ Failure handling: progress is saved first. If `syncSolves` throws, the error is 
 
 - **Protected** profile shell: sidebar links (anchor IDs), main panel with tabs via query `?tab=personal` or `?tab=security-media`.
 - **Avatar images:** `import.meta.glob('../assets/avatars/*...', { eager: true })` — images under `client/src/assets/avatars/` (folder may be populated in your clone).
-- **Display name** derived from `user.name` or email prefix.
-- **Important for juniors:** Most profile fields (education, password change, etc.) are **UI placeholders** — they are **not** wired to backend APIs in this repo. Only **email** shown as read-only reflects real account data.
+- **Display name** derived from `user.name` or email prefix (only ever shown to the user themselves).
+- **Friend tag:** shown under the name in the sidebar and as a read-only *Friend tag* field with a Copy button. (This replaced a fake `@<email prefix>` "username" that leaked part of the email.)
+- **Full Name** is a real, controlled field: **Save name** calls `updateName` (`PUT /auth/profile`) and shows success or the server's validation message.
+- **Important for juniors:** The other profile fields (phone, bio, education, password change, etc.) are still **UI placeholders** — they are **not** wired to backend APIs in this repo.
 
 ### 8.5 `Tracker.jsx` (core application logic)
 

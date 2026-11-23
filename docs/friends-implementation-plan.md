@@ -11,7 +11,7 @@ Design canvas: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3
 |---|---|---|
 | 1. Shared data & unique counting | **Done** (2026-11-24) | See "Phase 1 — what shipped" below. |
 | 2. Solve tracking | **Done** (2026-11-24) | See "Phase 2 — what shipped" below. |
-| 3. Identity | Not started | |
+| 3. Identity | **Done** (2026-11-24) | See "Phase 3 — what shipped" below. |
 | 4. Friendships & search API | Not started | |
 | 5. Leaderboard API | Not started | |
 | 6. Frontend | Not started | |
@@ -142,6 +142,17 @@ Design canvas: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3
 
 **Done when:** new and existing users get a tag on next `/me`; everyone is in name search unless they switch it off; renaming updates `nameSearch`; the Profile page never shows any part of the email except in the Email field.
 
+### Phase 3 — what shipped
+
+- `User`: `friendTag` (unique sparse index, **no default** — a `null` would break the sparse index), `discoverability.byName` (default `true`), `nameSearch` (`select: false`, both arrays indexed) kept in sync by a `pre('save')` hook.
+- `server/src/lib/tags.js`, `lib/nameSearch.js` (incl. `scoreName`, ready for Phase 4), `lib/identity.js` (`ensureFriendTag` — conditional update, safe under concurrent requests; retries on the rare duplicate).
+- Routes: tag at `/register`; lazy tag at `/me` (+ `discoverability` in the response); **new** `PUT /api/auth/profile`; **new** `routes/users.js` with `PUT /api/users/me/discoverability` (mounted at `/api/users`).
+- Client: `AuthContext` holds `discoverability` and exposes `updateName` / `updateDiscoverability`. `Profile.jsx`: `#TAG` replaces the fake `@<email prefix>` (sidebar + read-only *Friend tag* field with Copy); *Full Name* now saves via **Save name**.
+- **Pulled forward from Phase 7:** seed gives demo users fixed tags (`#A4TZ6HW`, `#7K3QX9P`, `#R8M2VQA`, `#K9P3NXE`) and adds `kavya@example.com` (`#W6DM3XF`) with name search off, for testing Phase 4.
+- Tests (38 total): `tags.test.js`, `nameSearch.test.js`, `identity.db.test.js`; DB tests now each use their own throwaway database via `test/helpers/db.js` (they run in parallel).
+- Verified through the API: existing user gets a stable tag on `/me`; registration returns a tag; rename rebuilds the index; empty name → 400; discoverability on/off; no token → 401.
+- **Not done / left as is:** `/me` still loads the full resume document (bug-fix release).
+
 ---
 
 ## Phase 4 — Friendships & search API
@@ -217,7 +228,7 @@ Map each screen to its canvas board.
 
 1. **`server/scripts/migrate-friends.js`** (`npm run migrate:friends`, idempotent). Per user:
    assign tag → build `nameSearch` → set `discoverability.byName: true` if missing → `expandSheetDone` → `backfillSolves(user, lcSetFromKeys(progress))` for users with `solvesSyncedAt: null` (already idempotent, from Phase 2) → compute `stats`.
-2. **Update `server/scripts/seed.js`:** fixed tags for demo users (aditi `A4TZ6HW`, priya `7K3QX9P`, rohan `R8M2VQA`, kabir `K9P3NXE`); friendships aditi–priya and aditi–rohan (accepted), kabir → aditi (pending); one extra demo user with name search switched off; **live** solves spread over this and last week so the leaderboard has data.
+2. **Update `server/scripts/seed.js`:** ~~fixed tags for demo users; one extra demo user with name search switched off~~ (done in Phase 3); friendships aditi–priya and aditi–rohan (accepted), kabir → aditi (pending); **live** solves spread over this and last week so the leaderboard has data.
 3. **Rollout on Render** (no new env vars):
    1. Deploy Phases 1–5 (backwards compatible; UI unchanged except unique counting).
    2. Run the migration once (Render shell: `npm run migrate:friends --prefix server`).
