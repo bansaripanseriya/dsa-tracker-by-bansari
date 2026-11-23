@@ -7,6 +7,9 @@ import cors from 'cors';
 import { connectDb } from './config/db.js';
 import authRoutes from './routes/auth.js';
 import progressRoutes from './routes/progress.js';
+import userRoutes from './routes/users.js';
+import friendRoutes from './routes/friends.js';
+import leaderboardRoutes from './routes/leaderboard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Load `.env` from repository root (parent of `server/`), not `server/.env`
@@ -14,6 +17,8 @@ const envPath = path.join(__dirname, '..', '..', '.env');
 dotenv.config({ path: envPath });
 
 const app = express();
+// Render (and Vite's dev proxy) sit in front of the app; trust one hop so rate limits see the real client IP.
+app.set('trust proxy', 1);
 const PORT = Number(process.env.PORT) || 4000;
 const HOST = process.env.HOST || '0.0.0.0';
 
@@ -40,6 +45,9 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/friends', friendRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 
 if (process.env.NODE_ENV === 'production') {
   const distCandidates = [

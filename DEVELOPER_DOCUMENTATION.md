@@ -90,6 +90,18 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 
 **Frontend dev proxy:** `client/vite.config.js` proxies `/api` → `http://localhost:4000`, so the browser can call `/api/...` without CORS pain during development.
 
+**Shared code alias:** `client/vite.config.js` also maps `@shared` → `../shared` and adds that folder to `server.fs.allow` (Vite only serves files inside `client/` by default). See §11.
+
+**Template:** `.env.example` in the repo root documents every variable; `cp .env.example .env` and set `JWT_SECRET`.
+
+**Local data and tests:**
+
+| Command (repo root) | What it does |
+|---|---|
+| `npm run seed` | `server/scripts/seed.js` — creates/resets 5 demo users (password `password123`) with sheet, practice and streak data and fixed friend tags: `aditi@` `#A4TZ6HW`, `priya@` `#7K3QX9P`, `rohan@` `#R8M2VQA`, `kabir@` `#K9P3NXE`, `kavya@example.com` `#W6DM3XF` (hidden from name search). Also creates friendships (aditi ↔ priya, rohan, kavya; priya ↔ rohan; kabir → aditi pending) and solve history with `live` solves in this and last leaderboard week, so the leaderboard matches the design (Priya 135 · Rohan 110 · Aditi 95 · Kavya 65). Only touches demo users. Refuses to run against a non-local `MONGODB_URI` unless `--force`. |
+| `npm test` | Runs `node --test` in `server/` (built-in Node test runner, no dependencies). Tests live in `server/test/*.test.js`. Each `*.db.test.js` file uses its own throwaway database, `dsa-tracker-test-<name>` (base URI from `MONGODB_URI_TEST`, default local; the name must contain `-test`), via `test/helpers/db.js`, and skips itself if MongoDB isn't running. |
+| `npm run migrate:friends` | `server/scripts/migrate-friends.js` → `server/src/lib/migrateFriends.js`. Prepares existing accounts for the friends feature, filling in only what's missing: friend tag, name search index, `discoverability.byName` (default on; an existing opt-out is kept), sheet ticks expanded to every section, backfilled solve history, stats; also creates indexes. Safe to re-run. `-- --dry-run` writes nothing and reports counts; a **non-local** database needs `-- --yes`. Production steps: `docs/friends-implementation-plan.md` → *Rollout runbook*. |
+
 ---
 
 ## 5. Database (MongoDB) and data model
@@ -119,6 +131,50 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 
 **User-level fields:** `email` (unique, normalized), `passwordHash`, optional `name`, Mongoose `timestamps` (`createdAt`, `updatedAt`).
 
+**`stats` subdocument** (denormalized, rewritten on every `PUT /api/progress`; lets other users' summaries be read without loading progress):
+
+| Field | Meaning |
+|-------|---------|
+| `totalSolved`, `easy`, `medium`, `hard` | Unique LeetCode problems done (sheet + practice). |
+| `lastCheckin` | Latest `YYYY-MM-DD` in `progress.streak.checkins`, or `null`. |
+| `updatedAt` | When stats were last computed. |
+
+**`solvesSyncedAt`** (`Date | null`): set once the user's pre-existing progress has been backfilled into `solves` (§5.3). `null` means "not yet" — the next progress save does it.
+
+**Friends identity fields:**
+
+| Field | Meaning |
+|-------|---------|
+| `friendTag` | Public id, 7 chars from `23456789ABCDEFGHJKMNPQRSTUVWXYZ`, stored **without** `#`, shown **with** `#`. Unique sparse index. **No default** (a sparse index only skips documents that lack the field, so it must never be `null`). Assigned by `ensureFriendTag` (§6.6); permanent once set. |
+| `discoverability.byName` | `true` by default (opt-out). `false` hides the user from name search; tag and exact-email lookups always work. |
+| `nameSearch.tokens`, `nameSearch.trigrams` | Search index for `name` (§6.6). `select: false` — never loaded or sent unless asked for. Rebuilt by a `pre('save')` hook when `name` changes; **update queries skip that hook**, so set it explicitly with `buildNameSearch` there (the seed does). |
+
+### 5.3 Solve schema (weekly leaderboard source)
+
+- **File:** `server/src/models/Solve.js` — **exports** `Solve`. Written only by `server/src/lib/solves.js`.
+- One document per **(user, LeetCode problem)**, unique index `{ userId, lcNumber }`; second index `{ userId, solvedAt }` for weekly queries.
+
+| Field | Meaning |
+|-------|---------|
+| `lcNumber`, `difficulty`, `points` | Problem and its points (5 / 10 / 15), fixed when first recorded. |
+| `solvedAt` | First time it was marked done. **Never moves** — unticking and re-ticking keeps it. |
+| `active` | `false` while the problem is unticked; re-ticking reactivates the same document. |
+| `source` | `live` = ticked while tracking existed (counts toward its week). `backfill` = already done before tracking (never counts toward a week; `solvedAt` = account `createdAt`). |
+
+### 5.4 Friendship schema
+
+- **File:** `server/src/models/Friendship.js` — **exports** `Friendship`. Written only by `server/src/lib/friendships.js`.
+- **One document per pair of users**: `userA` < `userB` (sorted as strings) with a unique index on `{ userA, userB }`, so two people requesting each other can never create two documents.
+
+| Field | Meaning |
+|-------|---------|
+| `requestedBy` | Who sent the request. |
+| `status` | `pending` or `accepted`. |
+| `acceptedAt` | When it became a friendship. |
+| `createdAt`, `updatedAt` | Mongoose timestamps. |
+
+Declining, cancelling and unfriending **delete** the document (nobody is notified; no cooldown).
+
 ---
 
 ## 6. Backend API — routes, middleware, and what each function does
@@ -134,6 +190,10 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 | `GET /api/health` | Simple `{ ok: true }` health check. |
 | `app.use('/api/auth', authRoutes)` | Auth endpoints. |
 | `app.use('/api/progress', progressRoutes)` | Progress endpoints (all protected). |
+| `app.use('/api/users', userRoutes)` | Tag lookup, people search, discoverability (§6.6, §6.7). |
+| `app.use('/api/friends', friendRoutes)` | Friend requests, friends list, friend profiles (§6.7). |
+| `app.use('/api/leaderboard', leaderboardRoutes)` | Weekly leaderboard (§6.8). |
+| `app.set('trust proxy', 1)` | Render and Vite's dev proxy sit in front of Express; trusting one hop lets the per-IP rate limits see the real client. |
 | Production static | Serves `client/dist` and `sendFile(index.html)` for client routes. |
 | `main()` | Async: `await connectDb()`, then `listen`. |
 
@@ -142,6 +202,16 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 | Function | Behavior |
 |----------|----------|
 | `authRequired(req, res, next)` | Reads `Authorization: Bearer <token>`. Missing → **401**. Verifies JWT with `JWT_SECRET`. Invalid → **401**. Valid → sets `req.user` to decoded payload (`sub` = user id) and `next()`. |
+| `authOptional(req, res, next)` | Same token check, but never rejects: sets `req.user` when the token is valid, otherwise continues anonymously. Used by the public tag lookup (invite page). |
+
+**Rate limits** (`server/src/middleware/rateLimits.js`, `express-rate-limit`, 1-minute windows, **429** `{ error, code: 'rate-limited' }`):
+
+| Limiter | Limit | Keyed by | Used on |
+|---------|-------|----------|---------|
+| `tagLookupLimiter` | 60 | IP | `GET /api/users/by-tag/:tag` |
+| `avatarLimiter` | 300 | IP | `GET /api/users/by-tag/:tag/avatar` |
+| `searchLimiter` | 30 | user | `GET /api/users/search` |
+| `friendWriteLimiter` | 30 | user | sending / accepting / removing requests, unfriending |
 
 ### 6.3 Auth routes (`server/src/routes/auth.js`)
 
@@ -158,7 +228,10 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 |--------|------|---------------------|
 | `POST` | `/register` | `express-validator`: email, password min 8, optional name. Hash password with `bcrypt.hash(..., 12)`. Reject duplicate email (**409**). Create `User`, return `{ token, user }` (**201**). |
 | `POST` | `/login` | Email + password. Compare with `bcrypt.compare`. Wrong credentials → **401**. Returns `{ token, user }`. |
-| `GET` | `/me` | Uses `authRequired`. Returns `{ user, progress }` from DB (progress may be empty object). |
+| `GET` | `/me` | Uses `authRequired`. Assigns a friend tag if the account has none yet (`ensureFriendTag`). Returns `{ user, discoverability, progress, avatar, resume, skills }`; `user` is `{ id, email, name, friendTag }`, `discoverability` is `{ byName }`. |
+| `PUT` | `/profile` | Uses `authRequired`. Body `{ name }`, trimmed, 1–120 chars (**400** otherwise). Saves via `save()` so the name search index is rebuilt. Returns `{ user }`. |
+
+`/register` assigns the friend tag immediately; `/login` returns the same `user` shape (`friendTag` may be `null` for an older account until its first `/me`).
 
 **JWT payload:** `{ sub: "<mongo user id>" }`.
 
@@ -169,9 +242,104 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 | Method | Path | Behavior |
 |--------|------|----------|
 | `GET` | `/` | `User.findById(req.user.sub).select('progress')` → `{ progress }`. |
-| `PUT` | `/` | Validates optional arrays/objects. Merges into `user.progress` only for fields present in body (`sheetDone`, `practiceDone`, `streak.checkins`, `openSections`). `markModified('progress')` + `save()`. Returns `{ progress }`. |
+| `PUT` | `/` | Validates optional arrays/objects. Merges into `user.progress` only for fields present in body (`sheetDone`, `practiceDone`, `sheetSaved`, `practiceSaved`, `streak.checkins`, `openSections`). Recomputes `user.stats`, `markModified('progress')` + `save()`, then **`syncSolves`** (below). Returns `{ progress }`. Errors → **500** `{ error }`. |
 
-**Note:** Partial updates still **replace** whole arrays when that field is sent (not a Mongo `$push` patch for single items).
+**Note:** Partial updates still **replace** whole arrays when that field is sent (not a Mongo `$push` patch for single items). The client contract is unchanged by solve tracking — the server works out what was newly solved itself.
+
+### 6.5 Solve tracking (`server/src/lib/solves.js`)
+
+| Function | Role |
+|----------|------|
+| `diffSolves(before, after)` | Pure: `{ added, removed }` between two sets of LeetCode numbers. |
+| `computeStats(lcSet, checkins, now)` | Pure: the `user.stats` object. |
+| `backfillSolves(user, lcSet)` | Records already-done problems as `source: 'backfill'` (never count toward a week) and sets `solvesSyncedAt`. Idempotent. Will be reused by the Phase 7 migration. |
+| `syncSolves(user, before, after, now)` | Called after every progress save. Backfills first if `solvesSyncedAt` is null, then **reconciles against the user's existing solve documents** (not the previous progress): new problems are upserted as `live` with `solvedAt = now`; removed ones get `active: false`. Upserts use `$setOnInsert`, so a re-ticked problem keeps its original `solvedAt` and `source`. |
+
+Failure handling: progress is saved first. If `syncSolves` throws, the error is logged and the request still succeeds; because it reconciles against the `solves` collection, the next save repairs the gap.
+
+### 6.6 Friends identity (`server/src/lib/tags.js`, `nameSearch.js`, `identity.js`) and `routes/users.js`
+
+| Function | Role |
+|----------|------|
+| `generateTag()` | Random 7-char tag via `crypto.randomInt`. |
+| `parseTagInput(input)` | `" #7k3 qx9p "` → `"7K3QX9P"`, or `null` if it isn't a valid tag. |
+| `formatTag(tag)` | `"#" + tag` — how tags are displayed. |
+| `normalizeName`, `tokensOf`, `trigramsOf`, `queryTrigramsOf` | Build the name search index. Stored trigrams pad both ends of each word (`" rohan "`); query trigrams pad only the front, because the user may still be typing. Letters of any script are kept. |
+| `buildNameSearch(name)` | `{ tokens, trigrams }` to store on the user. |
+| `scoreName(name, query)` | 4 = full name starts with it · 3 = a word starts with it · 2 = contains it (3+ chars) · 1 = one typo (4+ chars) · 0 = no match. Used by Phase 4 search. |
+| `ensureFriendTag(user)` | Assigns a tag (and builds `nameSearch`) only if the user has none — conditional update on `friendTag: null`, retried on the rare duplicate. Safe under concurrent requests. |
+| `selfUser(user)`, `selfDiscoverability(user)` | The signed-in user's own `{ id, email, name, friendTag }` and `{ byName }`. |
+
+### 6.7 Friends API — `routes/users.js`, `routes/friends.js` and their libraries
+
+**Who sees what** is decided in one place, `server/src/lib/cards.js`. Routes never send another user's document directly:
+
+| Function | Audience | Fields |
+|----------|----------|--------|
+| `publicCard(user)` | anyone, even signed out | `tag`, `name` (may be `''` — clients then show the tag), `avatar { presetIndex, photoUrl }` |
+| `memberCard(user)` | any signed-in user | + `totalSolved` |
+| `friendSummary(user, { since, today })` | friends list | + `solved { easy, medium, hard }`, `streak` (current), `lastCheckin`, `friendsSince` |
+| `buildFriendProfile(friend, …)` (`lib/profile.js`) | a friend's profile | + `solved` with `outOf` totals, `streak { current, best, activeDays }`, `checkins` (last 26 weeks), `thisWeek { start, end, points, easy, medium, hard }`, `recentSolves` (last 10 live) |
+
+Never included anywhere: email, Mongo `_id`, notes, resume, raw progress keys, avatar image data. `CARD_FIELDS` is the `.select()` string for loading users for cards. Avatar photos are served by their own URL so lists stay small.
+
+**`lib/friendships.js`** — the request state machine (throws `FriendError(code, status)` for expected failures):
+
+| Function | Behavior |
+|----------|----------|
+| `sendRequest(me, target)` | none → create pending (`created: true`) · pending by me → no change · pending by them → **accept** (requests crossed) · already friends → `already-friends` 409 · yourself → `self` 400. Limits: 200 friends (`friend-limit` / `their-friend-limit` 409), 50 pending outgoing (`too-many-pending` 429). Retries if two requests race on the unique pair index. |
+| `acceptRequest(me, other)` | Only the receiver of a pending request; else `no-request` 404. |
+| `removeRequest(me, other)` | Decline (incoming) or cancel (outgoing); deletes the pending document. |
+| `unfriend(me, other)` | Deletes the accepted document; else `not-friends` 404. |
+| `relationship`, `relationshipsWith`, `acceptedFriendships`, `friendIds`, `pendingRequests`, `countPendingIncoming`, `friendsSince` | Read helpers. Relationship values: `self`, `none`, `outgoing`, `incoming`, `friends`. |
+
+**`lib/search.js` — `searchUsers(me, q)`** returns `{ mode, results, reason? }`; each result is a `memberCard` + `relationship` + `matchType`:
+
+| Input | Mode | Rule |
+|-------|------|------|
+| Starts with `#` | `tag` | Exact (`parseTagInput`). Malformed → `reason: 'invalid-tag'`. A 7-letter word **without** `#` is a name search. |
+| Contains `@` | `email` | Only a complete address (`validator.isEmail`), normalized with `validator.normalizeEmail` — the same as registration, so Gmail dots/`+suffix` match. Otherwise `reason: 'partial-email'`. Gives the found account a tag/stats if it doesn't have them yet. |
+| Anything else | `name` | 2+ characters (else `reason: 'too-short'`). Candidates: word-prefix or shared trigrams, excluding yourself, users without a tag, and users with `discoverability.byName: false`; top 50 by trigram overlap, then ranked with `scoreName`. `matchType: 'close'` for one-typo matches (listed after exact ones). Max 10 results. |
+
+**`routes/users.js`** (mounted at `/api/users`):
+
+| Method | Path | Behavior |
+|--------|------|----------|
+| `GET` | `/by-tag/:tag` | `authOptional` + per-IP limit. Signed out → `{ user: publicCard }`; signed in → `{ user: memberCard, relationship }`. Unknown tag → **404**. Powers the invite page. |
+| `GET` | `/by-tag/:tag/avatar` | The uploaded photo as an image (PNG/JPEG/WebP/GIF only — no SVG, which could run scripts on our origin), `nosniff` + `default-src 'none'` CSP, cached a day (`?v=` changes with each upload). **404** if no photo. |
+| `GET` | `/search?q=` | `authRequired` + per-user limit. `searchUsers` above. |
+| `PUT` | `/me/discoverability` | `authRequired`. Body `{ byName: boolean }` (**400** otherwise). Returns `{ discoverability }`. |
+
+**`routes/friends.js`** (mounted at `/api/friends`, all `authRequired`; people are addressed by tag, with or without `#`; errors are `{ error, code }`):
+
+| Method | Path | Behavior |
+|--------|------|----------|
+| `GET` | `/` | `{ friends: friendSummary[] }`, sorted by name. |
+| `GET` | `/requests` | `{ incoming, outgoing }` — `memberCard` + `requestedAt`. |
+| `GET` | `/summary` | `{ pendingIncoming }` for the header badge. |
+| `POST` | `/requests` | Body `{ tag }` → `sendRequest`. **201** when a request was created, **200** otherwise. Returns `{ status: 'pending'|'accepted', relationship, user }`. |
+| `POST` | `/requests/:tag/accept` | Accept their request → `{ status: 'accepted', relationship: 'friends', user }`. |
+| `DELETE` | `/requests/:tag` | Decline or cancel → `{ status: 'removed', relationship: 'none' }`. |
+| `GET` | `/:tag/profile` | `{ profile }` for a friend. **404** `not-found` for non-friends *and* unknown tags alike, so strangers can't confirm someone exists. `profile.thisWeek.rank` / `.of` = their place on **your** leaderboard this week ("#1 of 4"). |
+| `DELETE` | `/:tag` | Unfriend. |
+
+`/auth/me` also calls `ensureStats` (`lib/solves.js`), so accounts that haven't saved progress since stats were introduced still show correct solved counts to friends.
+
+### 6.8 Weekly leaderboard — `lib/leaderboard.js`, `routes/leaderboard.js`
+
+**Rules:** you plus your accepted friends; strangers never appear. A week runs **Monday 00:00 IST → next Monday 00:00 IST** (`weekRangeIST`). Points are Easy 5 / Medium 10 / Hard 15 per problem, counted from `solves` that are `source: 'live'`, `active: true` and first solved inside the week — so backfilled history, un-ticked problems and re-ticked old problems never score. Computed on request (one aggregation per week); no cron jobs or stored tables.
+
+| Function | Role |
+|----------|------|
+| `weekScores(userIds, { start, end })` | One aggregation → `Map(userId → { points, easy, medium, hard })`. |
+| `competitionRanker(points)` | Pure: ranks with ties shared and the next rank skipped (`1, 2, 2, 4`). |
+| `weeklyLeaderboard(me, { offset, now })` | Rows = `memberCard` + `points`, `easy`, `medium`, `hard`, `solved`, `rank`, `rankChange`, `isMe`; sorted by rank, then name. `rankChange` = places gained versus the week before (`+1` up, `-1` down, `0` same), or `null` if nobody scored that week. Returns `{ week: { start, end, offset, live }, rows, me }`. |
+
+| Method | Path | Behavior |
+|--------|------|----------|
+| `GET` | `/api/leaderboard/weekly?offset=0..8` | `authRequired`. `offset` = weeks back (0 = this week, `live: true`). Out of range → **400**. |
+
+The client works out the "nudge" line (e.g. "15 pts behind Rohan") from `rows`; dates in `week` are UTC instants — display them in IST.
 
 ---
 
@@ -187,7 +355,9 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 
 | Export | Role |
 |--------|------|
-| `AuthProvider` | Holds `token`, `user`, `progress`, `loading`; syncs token with `localStorage`. |
+| `AuthProvider` | Holds `token`, `user` (`{ id, email, name, friendTag }`), `progress`, `avatar`, `discoverability` (`{ byName }`), `loading`; syncs token with `localStorage`. |
+| `updateName(name)` | `PUT /auth/profile`, then updates `user`. Throws on validation errors (the caller shows them). |
+| `updateDiscoverability(byName)` | `PUT /users/me/discoverability`, then updates `discoverability`. |
 | `loadSession(t)` | If no token: clears user/progress. Else `GET /auth/me`; on failure clears bad token. |
 | `login(email, password)` | `POST /auth/login`, stores token, sets state (effect loads session). |
 | `register(email, password, name)` | `POST /auth/register`, same. |
@@ -223,21 +393,28 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 | `/login` | Public only | `Login.jsx` |
 | `/register` | Public only | `Register.jsx` |
 | `/profile` | Protected | `Profile.jsx` |
-| `/` | Everyone | `Tracker.jsx` (main app) |
+| `/friends/find` | Protected | `FindFriends.jsx` — search, your friend tag, "who can find you", invite link |
+| `/friends/add/:tag` | **Everyone** (no guard) | `InviteLanding.jsx` — invite links work signed in or out |
+| `/friends/:tag` | Protected | `FriendProfile.jsx` — a friend's profile |
+| `/` | Everyone | `Tracker.jsx` (main app; `?tab=sheet|practice|streak|friends`) |
 | `*` | — | Redirect `/` |
+
+`PublicOnly` redirects a signed-in user to `postAuthPath()` — a pending invite (§8.7) if there is one, otherwise `/`.
 
 ### 8.3 `Login.jsx` / `Register.jsx`
 
 - Local form state: email, password, name (register), error, pending.
-- On submit: call context `login` / `register`, then **`mergeGuestProgressAfterAuth`** (`utils/guestProgress.js`) to union guest `localStorage` progress with server and `PUT /progress`, then `navigate('/')`.
+- On submit: call context `login` / `register`, then **`mergeGuestProgressAfterAuth`** (`utils/guestProgress.js`) to union guest `localStorage` progress with server and `PUT /progress`, then `navigate(postAuthPath())` — back to an invite link opened while signed out, otherwise `/`.
 - `ThemeToggle` in corner for auth pages.
 
 ### 8.4 `Profile.jsx`
 
 - **Protected** profile shell: sidebar links (anchor IDs), main panel with tabs via query `?tab=personal` or `?tab=security-media`.
 - **Avatar images:** `import.meta.glob('../assets/avatars/*...', { eager: true })` — images under `client/src/assets/avatars/` (folder may be populated in your clone).
-- **Display name** derived from `user.name` or email prefix.
-- **Important for juniors:** Most profile fields (education, password change, etc.) are **UI placeholders** — they are **not** wired to backend APIs in this repo. Only **email** shown as read-only reflects real account data.
+- **Display name** derived from `user.name` or email prefix (only ever shown to the user themselves).
+- **Friend tag:** shown under the name in the sidebar and as a read-only *Friend tag* field with a Copy button. (This replaced a fake `@<email prefix>` "username" that leaked part of the email.)
+- **Full Name** is a real, controlled field: **Save name** calls `updateName` (`PUT /auth/profile`) and shows success or the server's validation message.
+- **Important for juniors:** The other profile fields (phone, bio, education, password change, etc.) are still **UI placeholders** — they are **not** wired to backend APIs in this repo.
 
 ### 8.5 `Tracker.jsx` (core application logic)
 
@@ -281,7 +458,8 @@ This page orchestrates **guest vs logged-in** behavior and **autosave**.
 
 ### 9.1 `Header.jsx`
 
-- Brand link to `/`, optional **main nav** (Sheet / Practice / Streak) — either controlled by parent (`onTabChange`) or uses **`useNavigate`** to `/?tab=...` when only `showNav` is used.
+- Brand link to `/`, optional **main nav** (Sheet / Practice / Streak / **Friends**) — either controlled by parent (`onTabChange`) or uses **`useNavigate`** to `/?tab=...` when only `showNav` is used.
+- **Friend requests:** when signed in, loads `GET /friends/summary` on mount, on window focus and on the `dsa:friends-changed` event. Shows a red count on the Friends button, a dot on the bell, and "N friend requests — view" in the bell panel (which opens the Friends tab).
 - **Streak pill:** `countCheckinsCurrentWeek`, `calcStreak`, week grid popover.
 - **Profile menu** (logged in): My Profile, Settings (`/profile?tab=security-media`), Logout.
 - **Icons:** small inline SVG components (`ChevronDown`, `IconGift`, etc.).
@@ -298,15 +476,16 @@ This page orchestrates **guest vs logged-in** behavior and **autosave**.
 
 ### 9.4 `SheetTab.jsx`
 
-- Reads **`DATA`** from `data/problems.js`.
+- Reads **`DATA`** from `@shared/data/problems.js`.
 - Local filter state: `filt` (`all`, difficulty, `done`, `todo`), search `q`.
-- **`stats`:** totals, done counts, per-difficulty counts via `useMemo`.
+- **`stats`:** totals, done counts, per-difficulty counts via `computeSheetStats` — counted by **unique problem** (out of `TOTALS.all`, 1,677), not by checkbox.
+- Per-section counters (`x/y solved` on each section header) still count that section's rows.
 - **`sectionsHtml`:** builds list of collapsible sections and problem rows with **LeetCode** link from `leetCodeProblemUrl`.
 - Calls parent `toggleSheet`, `toggleSec`.
 
 ### 9.5 `PracticeTab.jsx`
 
-- Reads **`PRACTICE_DAYS`** from `data/practicePlan.js`.
+- Reads **`PRACTICE_DAYS`** from `@shared/data/practicePlan.js`.
 - Renders day cards, progress bar, toggles via `togglePrac` / `toggleDay`.
 
 ### 9.6 `StreakTab.jsx` (large dashboard)
@@ -327,6 +506,29 @@ Uses many helpers from `utils/streak.js` and `utils/sheetStats.js`.
 
 ---
 
+### 9.7 Friends UI (`components/tabs/FriendsTab.jsx`, `components/friends/`, friends pages)
+
+Designs: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3. Styles live in `client/src/styles/friends.css` and **reuse the app's own classes** — `.dash-card` for cards, `.pill` / `.btn-checkin` for buttons, `.db Easy|Medium|Hard` for difficulty badges, `.st` for stat tiles, `.gh-cell` for the heatmap, `.search` for inputs — so the doodle/classic layouts and light/dark themes restyle them automatically. `friends.css` only adds layout (all classes prefixed `fr-`).
+
+| Piece | Role |
+|-------|------|
+| `FriendsTab` | The 4th tracker tab. Mounted only after it's first opened (`Tracker.jsx`). Guest → sign-in card. Signed in → header (Copy invite link, Add friend), one-time "people can find you by name" note (dismissal remembered in `localStorage`), `Leaderboard`, `FriendRequests`, `FriendsList` or an empty state. Reloads everything on the `dsa:friends-changed` event. |
+| `friends/Leaderboard` | `GET /leaderboard/weekly?offset`; week arrows (0–8 back), points legend, podium (3+ people), ranked rows with ▲/▼ moves and E/M/H chips, your row highlighted, nudge line. Friend rows link to their profile. |
+| `friends/FriendRequests` | Incoming (Accept / Decline) and sent (Cancel). Hidden when empty. |
+| `friends/FriendsList` | Friends with streak, progress bar, "active today"; local filter when there are 5+. |
+| `friends/FriendAvatar` | Uploaded photo (`avatar.photoUrl`) or initials on a colour derived from the tag. |
+| `pages/FindFriends` | Debounced search (`/users/search`) with a mode chip (Name / Exact tag / Exact email), hints for `reason`s and empty results, per-result Add / Cancel / Accept / View. Side cards: your tag (Copy), **Who can find you** (tag and email always on; **Show me in name search** switch → `updateDiscoverability`), invite link (Copy). |
+| `pages/FriendProfile` | `GET /friends/:tag/profile` + your leaderboard row: header (rank chip, Remove friend with confirm), stat tiles, "this week: you vs them" bars, solved by difficulty, 26-week check-in heatmap, recent solves (LeetCode links). 404 → "only friends' profiles" message. |
+| `pages/InviteLanding` | `GET /users/by-tag/:tag` (token sent if signed in). States: signed out (name, avatar, tag only; Sign in / Create account store the pending invite), your own link, send request, request sent (Cancel), they asked you (Accept), already friends, invalid link. |
+
+### 9.8 Friends helpers
+
+| File | Exports |
+|------|---------|
+| `api/friends.js` | `friendsApi` — `leaderboard`, `friends`, `requests`, `summary`, `send`, `accept`, `removeRequest`, `unfriend`, `profile`, `search`, `byTag`. |
+| `hooks/useLoader.js` | `useLoader(load, deps)` → `{ data, error, loading, reload, setData }`; ignores stale responses. |
+| `utils/friends.js` | `FRIENDS_CHANGED` + `notifyFriendsChanged()` (refresh header badge and Friends tab); `displayName` / `firstName` / `initials` (never use the email); `formatTag`; `assetUrl` (API paths when `VITE_API_BASE_URL` is set); IST date formatting (`formatWeekRange`, `formatDate`, `formatSolvedAt`); `relativeDay`; `leaderboardNudge`; `searchModeOf`; pending invite (`setPendingInvite`, `peekPendingInvite`, `clearPendingInvite`, `postAuthPath` — key `dsa-pending-invite`); `inviteLink`; `copyText`; `errorMessage`. |
+
 ## 10. Frontend — utilities (every exported function)
 
 ### 10.1 `client/src/utils/guestProgress.js`
@@ -338,17 +540,23 @@ Uses many helpers from `utils/streak.js` and `utils/sheetStats.js`.
 | `saveGuestProgress(data)` | Normalize and write JSON to localStorage. |
 | `clearGuestProgress()` | Remove guest key. |
 | `unionStrings(a, b)` | Unique merge of two string arrays. |
-| `applyPendingToggle(merged, pending)` | After login, replay user intent captured in `pending` (`sheet` / `practice` / `checkin`) on top of merged data. |
-| `mergeWithServerProgress(local, server)` | Union of sheet keys, practice keys, streak dates, and open sections (numeric merge). |
+| `applyPendingToggle(merged, pending)` | After login, replay user intent captured in `pending` (`sheet` / `practice` / `checkin`) on top of merged data. A `sheet` toggle uses `toggleProblemEverywhere`. |
+| `mergeWithServerProgress(local, server)` | Union of sheet keys, practice keys, streak dates, and open sections (numeric merge); the sheet keys are then passed through `expandSheetDone`. |
 | `mergeGuestProgressAfterAuth(apiClient, setProgress)` | `GET /auth/me`, merge with guest, append today to streak, `PUT /progress`, update context, clear guest. |
 
 ### 10.2 `client/src/utils/practiceSheetSync.js`
 
 | Function | Role |
 |----------|------|
-| `sheetKeysForLeetCodeNumber(num)` | Find every sheet key `[sectionId]_[index]` whose problem number matches `num`. |
+Thin client wrapper over `shared/problemIndex.js` (§11.3).
+
+| Function | Role |
+|----------|------|
+| `sheetKeysForLeetCodeNumber(num)` | Every sheet key `[sectionId]_[index]` for that LeetCode number. |
 | `practiceProblemNumber(day, pi)` | LeetCode number for that practice cell. |
 | `syncSheetDoneForPractice(sheetDone, day, pi, practiceNowDone)` | If practice is marked **done**, add **all** matching sheet keys for that LeetCode number. **Unchecking practice does not remove** sheet marks (by design). |
+| `toggleProblemEverywhere` (re-export) | Used by `Tracker._toggleSheet`: ticking or unticking a sheet row applies to **every section** that lists the same problem. |
+| `expandSheetDone` (re-export) | Used when progress is loaded (guest and signed-in) so old data ticked in only one section shows in all of them. |
 
 ### 10.3 `client/src/utils/streak.js`
 
@@ -357,7 +565,7 @@ Uses many helpers from `utils/streak.js` and `utils/sheetStats.js`.
 | `dsaTodayStr()` | Local calendar date `YYYY-MM-DD`. |
 | `countCheckinsCurrentWeek(checkins)` | How many distinct check-in dates fall in current Sun–Sat week. |
 | `appendTodayIfMissing(checkins)` | Sorted list including today once. |
-| `calcStreak(checkins)` | `{ current, best, total }` — consecutive days ending today for `current`; longest run for `best`. |
+| `calcStreak(checkins)` | Re-exported from `shared/streak.js` (§11.5): `{ current, best, total }` — consecutive days ending today (browser's local date) for `current`; longest run for `best`. |
 | `yearCheckinDates(checkins, year)` | Filter/sort dates for one year. |
 | `maxStreakInYear(sortedDates)` | Longest consecutive run within that sorted list. |
 | `yearActivityStats(checkins, year)` | `{ activeDays, maxStreak }`. |
@@ -375,7 +583,7 @@ Uses many helpers from `utils/streak.js` and `utils/sheetStats.js`.
 
 | Function | Role |
 |----------|------|
-| `computeSheetStats(sheetDone)` | Walks entire `DATA` sheet: counts totals and done per difficulty; `pctRaw` for bars; `pctLabel` human string via `formatSheetPctLabel`. |
+| `computeSheetStats(sheetDone)` | Counts **unique LeetCode problems** done (via `lcSetFromKeys`) against `TOTALS` from `shared/problemIndex.js`; returns `{ total, done, pctRaw, pctLabel, easy, med, hard }`. A problem listed under several topics counts once. Used by `SheetTab` and `StreakTab`. |
 | `formatSheetPctLabel(done, total)` | **Private** helper inside file — formats percent text (`<0.1`, one decimal, etc.). |
 
 ### 10.5 `client/src/utils/leetcode.js`
@@ -386,17 +594,55 @@ Uses many helpers from `utils/streak.js` and `utils/sheetStats.js`.
 
 ---
 
-## 11. Frontend — data files (not “functions”, but critical)
+## 11. Shared code (`shared/`) — data and pure logic used by client **and** server
 
-### 11.1 `client/src/data/problems.js`
+`shared/` holds plain ES modules with no dependencies (`shared/package.json` only declares `"type": "module"`). The client imports them as `@shared/...`; the server and scripts import them with relative paths (`../../shared/...`).
+
+### 11.1 `shared/data/problems.js`
 
 - **Exports:** `DATA` — array of sections `{ id, title, color, bg, p }`.
 - **`p` entries:** `[leetcodeNumber, "Title", "Easy"|"Medium"|"Hard"]`.
-- Large static dataset (~25 topics). This is the **source of truth** for the sheet tab.
+- 25 topics, **2,530 rows but 1,677 unique problems** — many problems are listed under several topics (e.g. 392 *Is Subsequence* is in 5).
+- **Keys are positional.** Progress is stored as `"<sectionId>_<index>"`, so **only ever append** to a section; inserting or reordering would move users' ticks onto different problems.
+- Every practice-plan problem is also on the sheet (139, 494 appended to section 10 and 474 to section 11 for this). Tests enforce this, and that each problem has one difficulty everywhere.
 
-### 11.2 `client/src/data/practicePlan.js`
+### 11.2 `shared/data/practicePlan.js`
 
-- **Exports:** `PRACTICE_DAYS` — array of `{ day, topic, problems: [[num, title, diff], ...] }`.
+- **Exports:** `PRACTICE_DAYS` — array of `{ day, topic, problems: [[num, title, diff], ...] }`. Keys are `"p<day>_<index>"`.
+
+### 11.3 `shared/problemIndex.js`
+
+Lookups built once at import time.
+
+| Export | Role |
+|--------|------|
+| `SHEET_KEY_TO_LC`, `PRACTICE_KEY_TO_LC` | Maps from progress keys to LeetCode numbers. |
+| `LC_INFO` | LeetCode number → `{ num, name, difficulty, sheetKeys }`. |
+| `TOTALS` | Unique problems on the sheet: `{ all: 1677, easy: 449, medium: 884, hard: 344 }`. |
+| `sheetKeysForLc(num)` | All sheet keys of a problem. |
+| `lcSetFromKeys(sheetDone, practiceDone)` | Set of unique LeetCode numbers done; unknown keys ignored. |
+| `countByDifficulty(nums)` | `{ total, easy, medium, hard }`. |
+| `toggleProblemEverywhere(sheetDone, key)` | Tick/untick a problem in every section it appears in. |
+| `expandSheetDone(sheetDone, practiceDone)` | Add sibling keys for every done problem (sheet or practice). Returns the same array if nothing changed. |
+
+### 11.4 `shared/scoring.js`
+
+For the upcoming weekly leaderboard (see `docs/friends-implementation-plan.md`).
+
+| Export | Role |
+|--------|------|
+| `POINTS`, `pointsFor(difficulty)` | Easy 5, Medium 10, Hard 15. |
+| `IST_OFFSET_MS` | UTC+5:30 (India has no daylight saving). |
+| `weekRangeIST(now, offset)` | `{ start, end }` of the leaderboard week: Monday 00:00 IST to the next Monday 00:00 IST, `offset` weeks back. |
+
+### 11.5 `shared/streak.js`
+
+| Export | Role |
+|--------|------|
+| `localDateStr(date)` | `YYYY-MM-DD` in the machine's local zone (what the browser records as a check-in). |
+| `istDateStr(now)` | `YYYY-MM-DD` in IST — the server's "today" (friend profiles, friends list). |
+| `addDays(dateStr, n)` | Calendar arithmetic on date strings. |
+| `calcStreak(checkins, today = localDateStr())` | `{ current, best, total }`; duplicates and non-strings ignored. The client passes nothing (local today); the server passes `istDateStr()`. |
 
 ---
 

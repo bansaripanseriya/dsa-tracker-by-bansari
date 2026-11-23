@@ -4,6 +4,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { mergeGuestProgressAfterAuth } from '../utils/guestProgress';
+import { postAuthPath } from '../utils/friends';
 
 export default function Login() {
   const { login, setProgress } = useAuth();
@@ -28,7 +29,7 @@ export default function Login() {
     try {
       await login(email, password);
       await mergeGuestProgressAfterAuth(api, setProgress);
-      navigate('/', { replace: true });
+      navigate(postAuthPath(), { replace: true }); // back to a pending invite link, if any
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
     } finally {

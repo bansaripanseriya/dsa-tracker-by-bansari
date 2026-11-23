@@ -1,0 +1,6 @@
+{
+  "name": "dsa-tracker-shared",
+  "private": true,
+  "description": "Problem data and pure logic shared by client/ and server/. No dependencies.",
+  "type": "module"
+}

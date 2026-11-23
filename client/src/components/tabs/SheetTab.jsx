@@ -1,17 +1,10 @@
 import { useMemo, useState } from 'react';
-import { DATA } from '../../data/problems';
+import { DATA } from '@shared/data/problems.js';
 import { leetCodeProblemUrl } from '../../utils/leetcode';
+import { computeSheetStats } from '../../utils/sheetStats';
 
 function key(sid, pi) {
   return `${sid}_${pi}`;
-}
-
-function totalProblems() {
-  return DATA.reduce((a, s) => a + s.p.length, 0);
-}
-
-function cntDiff(d) {
-  return DATA.reduce((a, s) => a + s.p.filter((p) => p[2] === d).length, 0);
 }
 
 function StarIcon({ filled = false }) {
@@ -38,26 +31,20 @@ export default function SheetTab({ sheetDone, sheetSaved, toggleSheet, toggleShe
     setFilt(v);
   }
 
+  // Counted by unique problem: a problem listed under several topics counts once.
   const stats = useMemo(() => {
-    const T = totalProblems();
-    const N = sheetDone.length;
-    const P = T ? Math.round((N / T) * 100) : 0;
-    const eT = cntDiff('Easy');
-    const mT = cntDiff('Medium');
-    const hT = cntDiff('Hard');
-    const dDiff = (diff) => {
-      let c = 0;
-      DATA.forEach((s) => {
-        s.p.forEach((p, i) => {
-          if (p[2] === diff && doneSet.has(key(s.id, i))) c++;
-        });
-      });
-      return c;
+    const s = computeSheetStats(sheetDone);
+    return {
+      T: s.total,
+      N: s.done,
+      P: Math.round(s.pctRaw),
+      eT: s.easy.total,
+      eD: s.easy.done,
+      mT: s.med.total,
+      mD: s.med.done,
+      hT: s.hard.total,
+      hD: s.hard.done
     };
-    const eD = dDiff('Easy');
-    const mD = dDiff('Medium');
-    const hD = dDiff('Hard');
-    return { T, N, P, eT, eD, mT, mD, hT, hD };
   }, [sheetDone]);
 
   const sectionsHtml = useMemo(() => {
