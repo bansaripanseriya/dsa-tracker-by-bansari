@@ -25,7 +25,8 @@ jspm_packages/
 # ================================
 .env
 .env.*
-!.env.example   # allow sample env file
+# allow the sample env file (gitignore has no inline comments, so this must be on its own line)
+!.env.example
 
 # ================================
 # Build folders
