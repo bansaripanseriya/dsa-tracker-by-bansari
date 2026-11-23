@@ -7,7 +7,11 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Tracker from './pages/Tracker';
 import Profile from './pages/Profile';
+import FindFriends from './pages/FindFriends';
+import FriendProfile from './pages/FriendProfile';
+import InviteLanding from './pages/InviteLanding';
 import ScrollToTopButton from './components/ScrollToTopButton';
+import { postAuthPath } from './utils/friends';
 
 function TrackerWithUserKey() {
   const { user } = useAuth();
@@ -24,7 +28,8 @@ function PublicOnly({ children }) {
     );
   }
   if (token) {
-    return <Navigate to="/" replace />;
+    // Back to an invite link opened while signed out, otherwise home.
+    return <Navigate to={postAuthPath()} replace />;
   }
   return children;
 }
@@ -84,6 +89,24 @@ function AppRoutes() {
         element={
           <ProtectedOnly>
             <Profile />
+          </ProtectedOnly>
+        }
+      />
+      <Route
+        path="/friends/find"
+        element={
+          <ProtectedOnly>
+            <FindFriends />
+          </ProtectedOnly>
+        }
+      />
+      {/* Invite links work signed in or out, so this route has no guard. */}
+      <Route path="/friends/add/:tag" element={<InviteLanding />} />
+      <Route
+        path="/friends/:tag"
+        element={
+          <ProtectedOnly>
+            <FriendProfile />
           </ProtectedOnly>
         }
       />

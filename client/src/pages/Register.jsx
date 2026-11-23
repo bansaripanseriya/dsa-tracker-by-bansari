@@ -4,6 +4,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { mergeGuestProgressAfterAuth } from '../utils/guestProgress';
+import { postAuthPath } from '../utils/friends';
 
 export default function Register() {
   const { register, setProgress } = useAuth();
@@ -25,7 +26,7 @@ export default function Register() {
     try {
       await register(email, password, name.trim() || undefined);
       await mergeGuestProgressAfterAuth(api, setProgress);
-      navigate('/', { replace: true });
+      navigate(postAuthPath(), { replace: true }); // back to a pending invite link, if any
     } catch (err) {
       const msg = err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Registration failed';
       setError(msg);

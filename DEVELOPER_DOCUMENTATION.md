@@ -392,13 +392,18 @@ The client works out the "nudge" line (e.g. "15 pts behind Rohan") from `rows`; 
 | `/login` | Public only | `Login.jsx` |
 | `/register` | Public only | `Register.jsx` |
 | `/profile` | Protected | `Profile.jsx` |
-| `/` | Everyone | `Tracker.jsx` (main app) |
+| `/friends/find` | Protected | `FindFriends.jsx` — search, your friend tag, "who can find you", invite link |
+| `/friends/add/:tag` | **Everyone** (no guard) | `InviteLanding.jsx` — invite links work signed in or out |
+| `/friends/:tag` | Protected | `FriendProfile.jsx` — a friend's profile |
+| `/` | Everyone | `Tracker.jsx` (main app; `?tab=sheet|practice|streak|friends`) |
 | `*` | — | Redirect `/` |
+
+`PublicOnly` redirects a signed-in user to `postAuthPath()` — a pending invite (§8.7) if there is one, otherwise `/`.
 
 ### 8.3 `Login.jsx` / `Register.jsx`
 
 - Local form state: email, password, name (register), error, pending.
-- On submit: call context `login` / `register`, then **`mergeGuestProgressAfterAuth`** (`utils/guestProgress.js`) to union guest `localStorage` progress with server and `PUT /progress`, then `navigate('/')`.
+- On submit: call context `login` / `register`, then **`mergeGuestProgressAfterAuth`** (`utils/guestProgress.js`) to union guest `localStorage` progress with server and `PUT /progress`, then `navigate(postAuthPath())` — back to an invite link opened while signed out, otherwise `/`.
 - `ThemeToggle` in corner for auth pages.
 
 ### 8.4 `Profile.jsx`
@@ -452,7 +457,8 @@ This page orchestrates **guest vs logged-in** behavior and **autosave**.
 
 ### 9.1 `Header.jsx`
 
-- Brand link to `/`, optional **main nav** (Sheet / Practice / Streak) — either controlled by parent (`onTabChange`) or uses **`useNavigate`** to `/?tab=...` when only `showNav` is used.
+- Brand link to `/`, optional **main nav** (Sheet / Practice / Streak / **Friends**) — either controlled by parent (`onTabChange`) or uses **`useNavigate`** to `/?tab=...` when only `showNav` is used.
+- **Friend requests:** when signed in, loads `GET /friends/summary` on mount, on window focus and on the `dsa:friends-changed` event. Shows a red count on the Friends button, a dot on the bell, and "N friend requests — view" in the bell panel (which opens the Friends tab).
 - **Streak pill:** `countCheckinsCurrentWeek`, `calcStreak`, week grid popover.
 - **Profile menu** (logged in): My Profile, Settings (`/profile?tab=security-media`), Logout.
 - **Icons:** small inline SVG components (`ChevronDown`, `IconGift`, etc.).
@@ -498,6 +504,29 @@ Uses many helpers from `utils/streak.js` and `utils/sheetStats.js`.
 **Notes feature:** `openNotesPopup`, `closeNotesPopup`, `saveNote`, `openNotesBoard`, `closeNotesBoard`, `addNoteFromBoard`, `deleteActiveNote`, `updateActiveNote` — all **client-only** persistence.
 
 ---
+
+### 9.7 Friends UI (`components/tabs/FriendsTab.jsx`, `components/friends/`, friends pages)
+
+Designs: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3. Styles live in `client/src/styles/friends.css` and **reuse the app's own classes** — `.dash-card` for cards, `.pill` / `.btn-checkin` for buttons, `.db Easy|Medium|Hard` for difficulty badges, `.st` for stat tiles, `.gh-cell` for the heatmap, `.search` for inputs — so the doodle/classic layouts and light/dark themes restyle them automatically. `friends.css` only adds layout (all classes prefixed `fr-`).
+
+| Piece | Role |
+|-------|------|
+| `FriendsTab` | The 4th tracker tab. Mounted only after it's first opened (`Tracker.jsx`). Guest → sign-in card. Signed in → header (Copy invite link, Add friend), one-time "people can find you by name" note (dismissal remembered in `localStorage`), `Leaderboard`, `FriendRequests`, `FriendsList` or an empty state. Reloads everything on the `dsa:friends-changed` event. |
+| `friends/Leaderboard` | `GET /leaderboard/weekly?offset`; week arrows (0–8 back), points legend, podium (3+ people), ranked rows with ▲/▼ moves and E/M/H chips, your row highlighted, nudge line. Friend rows link to their profile. |
+| `friends/FriendRequests` | Incoming (Accept / Decline) and sent (Cancel). Hidden when empty. |
+| `friends/FriendsList` | Friends with streak, progress bar, "active today"; local filter when there are 5+. |
+| `friends/FriendAvatar` | Uploaded photo (`avatar.photoUrl`) or initials on a colour derived from the tag. |
+| `pages/FindFriends` | Debounced search (`/users/search`) with a mode chip (Name / Exact tag / Exact email), hints for `reason`s and empty results, per-result Add / Cancel / Accept / View. Side cards: your tag (Copy), **Who can find you** (tag and email always on; **Show me in name search** switch → `updateDiscoverability`), invite link (Copy). |
+| `pages/FriendProfile` | `GET /friends/:tag/profile` + your leaderboard row: header (rank chip, Remove friend with confirm), stat tiles, "this week: you vs them" bars, solved by difficulty, 26-week check-in heatmap, recent solves (LeetCode links). 404 → "only friends' profiles" message. |
+| `pages/InviteLanding` | `GET /users/by-tag/:tag` (token sent if signed in). States: signed out (name, avatar, tag only; Sign in / Create account store the pending invite), your own link, send request, request sent (Cancel), they asked you (Accept), already friends, invalid link. |
+
+### 9.8 Friends helpers
+
+| File | Exports |
+|------|---------|
+| `api/friends.js` | `friendsApi` — `leaderboard`, `friends`, `requests`, `summary`, `send`, `accept`, `removeRequest`, `unfriend`, `profile`, `search`, `byTag`. |
+| `hooks/useLoader.js` | `useLoader(load, deps)` → `{ data, error, loading, reload, setData }`; ignores stale responses. |
+| `utils/friends.js` | `FRIENDS_CHANGED` + `notifyFriendsChanged()` (refresh header badge and Friends tab); `displayName` / `firstName` / `initials` (never use the email); `formatTag`; `assetUrl` (API paths when `VITE_API_BASE_URL` is set); IST date formatting (`formatWeekRange`, `formatDate`, `formatSolvedAt`); `relativeDay`; `leaderboardNudge`; `searchModeOf`; pending invite (`setPendingInvite`, `peekPendingInvite`, `clearPendingInvite`, `postAuthPath` — key `dsa-pending-invite`); `inviteLink`; `copyText`; `errorMessage`. |
 
 ## 10. Frontend — utilities (every exported function)
 

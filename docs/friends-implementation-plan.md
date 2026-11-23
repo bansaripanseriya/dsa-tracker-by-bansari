@@ -14,7 +14,7 @@ Design canvas: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3
 | 3. Identity | **Done** (2026-11-24) | See "Phase 3 — what shipped" below. |
 | 4. Friendships & search API | **Done** (2026-11-24) | See "Phase 4 — what shipped" below. |
 | 5. Leaderboard API | **Done** (2026-11-24) | See "Phase 5 — what shipped" below. |
-| 6. Frontend | Not started | |
+| 6. Frontend | **Done** (2026-11-24) | See "Phase 6 — what shipped" below. |
 | 7. Migration, seed, rollout | Partly done | Seed finished early (phases 3 and 5); migration script and rollout remain. |
 
 ---
@@ -249,6 +249,16 @@ Map each screen to its canvas board.
 7. **Styles:** `client/src/styles/friends.css` using the existing tokens; check both layouts (doodle / classic) and both themes.
 
 **Done when:** the manual QA checklist below passes on desktop and at phone width.
+
+### Phase 6 — what shipped
+
+- Friends tab (4th tracker tab, mounted on first open), `friends/Leaderboard`, `FriendRequests`, `FriendsList`, `FriendAvatar`; pages `FindFriends`, `FriendProfile`, `InviteLanding`; routes `/friends/find`, `/friends/:tag` (protected) and `/friends/add/:tag` (public).
+- Header: Friends nav button with a pending-requests count (desktop and mobile menu), bell dot and "N friend requests — view" panel; refreshed on focus and after any friend action (`dsa:friends-changed` event).
+- Pending invites: opening an invite signed out → Sign in / Create account → back on the invite (`Login`, `Register` and `PublicOnly` use `postAuthPath()`).
+- Optional one-time "people can now find you by name" note — included, dismissal stored in `localStorage`.
+- **Styling approach:** reuses the app's own classes (`.dash-card`, `.pill`, `.btn-checkin`, `.db`, `.st`, `.gh-cell`, `.search`) so both layouts and both themes work with no per-theme CSS; `friends.css` adds layout only, plus one rule giving the primary button a teal accent in the dark notebook theme (which otherwise styles all buttons alike).
+- **Verified in a real browser** (headless Chrome via `playwright-core`, seeded data): Friends tab standings / arrows / nudge, last-week view, header badge and bell, friend profile, non-friend profile → "not available", search (`rohn` typo, `#tag`, partial-email hint), own invite link, signed-out invite (no solved count shown) → sign in → returned to the invite in the "already sent you a request" state; phone width (390px) for the tab, profile and search; notebook light, notebook dark and classic dark looks. No console errors apart from the expected test 404 and the app's long-standing missing `favicon.ico`.
+- Fixed during that check: leaderboard rows wrapped badly at phone width (now a fixed grid).
 
 ---
 

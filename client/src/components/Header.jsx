@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
 import LayoutToggle from './LayoutToggle';
 import { calcStreak, countCheckinsCurrentWeek } from '../utils/streak';
+import { friendsApi } from '../api/friends';
+import { FRIENDS_CHANGED } from '../utils/friends';
 
 function ChevronDown({ className = '' }) {
   return (
@@ -121,6 +123,32 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
   const mobileMenuRef = useRef(null);
   const quickPanelRef = useRef(null);
   const lastScrollYRef = useRef(0);
+
+  // Incoming friend requests, for the Friends badge and the bell. Refreshed on focus and after friend actions.
+  const [pendingFriends, setPendingFriends] = useState(0);
+  useEffect(() => {
+    if (!user) {
+      setPendingFriends(0);
+      return undefined;
+    }
+    let cancelled = false;
+    const load = () =>
+      friendsApi
+        .summary()
+        .then((d) => {
+          if (!cancelled) setPendingFriends(d.pendingIncoming || 0);
+        })
+        .catch(() => {});
+    load();
+    window.addEventListener('focus', load);
+    window.addEventListener(FRIENDS_CHANGED, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', load);
+      window.removeEventListener(FRIENDS_CHANGED, load);
+    };
+  }, [user]);
+  const pendingLabel = `${pendingFriends} friend request${pendingFriends === 1 ? '' : 's'}`;
 
   const weekCount = useMemo(() => countCheckinsCurrentWeek(streak?.checkins), [streak?.checkins]);
   const streakStats = useMemo(() => calcStreak(streak?.checkins || []), [streak?.checkins]);
@@ -254,6 +282,22 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
     setMobileMenuOpen(false);
   }
 
+  function notificationsContent() {
+    if (!pendingFriends) return 'No notifications!';
+    return (
+      <button
+        type="button"
+        className="hdr-notif-link"
+        onClick={() => {
+          setQuickPanel(null);
+          handleTabClick('friends');
+        }}
+      >
+        {pendingLabel} — view
+      </button>
+    );
+  }
+
   const mobileCompact = isMobileView;
 
   return (
@@ -280,6 +324,14 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
             <span>Streak</span>
             <ChevronDown className="hdr-nav-chev" />
           </button>
+          <button type="button" className={`hdr-nav-btn friends-tab${activeTab === 'friends' ? ' active' : ''}`} onClick={() => handleTabClick('friends')}>
+            <span>Friends</span>
+            {pendingFriends > 0 ? (
+              <span className="hdr-nav-badge" aria-label={pendingLabel}>
+                {pendingFriends}
+              </span>
+            ) : null}
+          </button>
         </nav>
       )}
 
@@ -295,12 +347,18 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
         <button type="button" className="hdr-icon-btn hdr-quick-btn" aria-label="Calendar" onClick={() => toggleQuickPanel('calendar')}>
           <IconGift />
         </button>
-        <button type="button" className="hdr-icon-btn hdr-quick-btn" aria-label="Notifications" onClick={() => toggleQuickPanel('notifications')}>
+        <button
+          type="button"
+          className="hdr-icon-btn hdr-quick-btn"
+          aria-label={pendingFriends ? `Notifications: ${pendingLabel}` : 'Notifications'}
+          onClick={() => toggleQuickPanel('notifications')}
+        >
           <IconBell />
+          {pendingFriends > 0 ? <span className="hdr-bell-dot" aria-hidden="true" /> : null}
         </button>
         {quickPanel ? (
           <div className="hdr-quick-panel" role="dialog" aria-label="Header quick info">
-            {quickPanel === 'notifications' ? 'No notifications!' : 'Coming soon!'}
+            {quickPanel === 'notifications' ? notificationsContent() : 'Coming soon!'}
           </div>
         ) : null}
         <LayoutToggle compact />
@@ -405,18 +463,32 @@ export default function Header({ note, activeTab, onTabChange, streak, showNav =
                   <button type="button" className={`hdr-nav-btn streak-tab${activeTab === 'streak' ? ' active' : ''}`} onClick={() => handleTabClick('streak')}>
                     <span>Streak</span>
                   </button>
+                  <button type="button" className={`hdr-nav-btn friends-tab${activeTab === 'friends' ? ' active' : ''}`} onClick={() => handleTabClick('friends')}>
+                    <span>Friends</span>
+                    {pendingFriends > 0 ? (
+                      <span className="hdr-nav-badge" aria-label={pendingLabel}>
+                        {pendingFriends}
+                      </span>
+                    ) : null}
+                  </button>
                 </nav>
               )}
               <div className="hdr-icon-row hdr-mobile-icon-row" ref={quickPanelRef}>
                 <button type="button" className="hdr-icon-btn hdr-quick-btn" aria-label="Calendar" onClick={() => toggleQuickPanel('calendar')}>
                   <IconGift />
                 </button>
-                <button type="button" className="hdr-icon-btn hdr-quick-btn" aria-label="Notifications" onClick={() => toggleQuickPanel('notifications')}>
+                <button
+                  type="button"
+                  className="hdr-icon-btn hdr-quick-btn"
+                  aria-label={pendingFriends ? `Notifications: ${pendingLabel}` : 'Notifications'}
+                  onClick={() => toggleQuickPanel('notifications')}
+                >
                   <IconBell />
+                  {pendingFriends > 0 ? <span className="hdr-bell-dot" aria-hidden="true" /> : null}
                 </button>
                 {quickPanel ? (
                   <div className="hdr-quick-panel hdr-quick-panel-mobile" role="dialog" aria-label="Header quick info">
-                    {quickPanel === 'notifications' ? 'No notifications!' : 'Coming soon!'}
+                    {quickPanel === 'notifications' ? notificationsContent() : 'Coming soon!'}
                   </div>
                 ) : null}
                 <LayoutToggle compact />

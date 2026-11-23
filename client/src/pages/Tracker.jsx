@@ -7,6 +7,7 @@ import LoginModal from '../components/LoginModal';
 import SheetTab from '../components/tabs/SheetTab';
 import PracticeTab from '../components/tabs/PracticeTab';
 import StreakTab from '../components/tabs/StreakTab';
+import FriendsTab from '../components/tabs/FriendsTab';
 import { TOTALS } from '@shared/problemIndex.js';
 import { applyPendingToggle, clearGuestProgress, loadGuestProgress, mergeWithServerProgress, saveGuestProgress } from '../utils/guestProgress';
 import { expandSheetDone, syncSheetDoneForPractice, toggleProblemEverywhere } from '../utils/practiceSheetSync';
@@ -41,10 +42,16 @@ export default function Tracker() {
 
   useEffect(() => {
     const fromUrl = searchParams.get('tab');
-    if (fromUrl === 'sheet' || fromUrl === 'practice' || fromUrl === 'streak') {
+    if (fromUrl === 'sheet' || fromUrl === 'practice' || fromUrl === 'streak' || fromUrl === 'friends') {
       setTab(fromUrl);
     }
   }, [searchParams]);
+
+  // The Friends tab loads data from the server, so only mount it once it has been opened.
+  const [friendsOpened, setFriendsOpened] = useState(false);
+  useEffect(() => {
+    if (tab === 'friends') setFriendsOpened(true);
+  }, [tab]);
 
   useEffect(() => {
     progressRef.current = { sheetDone, practiceDone, sheetSaved, practiceSaved, streak, openSections };
@@ -317,6 +324,10 @@ export default function Tracker() {
           sheetDone={sheetDone}
           displayName={user?.name || user?.email?.split('@')[0] || ''}
         />
+      </div>
+
+      <div className={`tab-pane${tab === 'friends' ? ' visible' : ''}`} id="tab-friends">
+        {friendsOpened ? <FriendsTab authenticated={!!token} /> : null}
       </div>
 
       <footer className="footer">
