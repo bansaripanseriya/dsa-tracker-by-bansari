@@ -16,6 +16,7 @@ import {
   unfriend
 } from '../lib/friendships.js';
 import { buildFriendProfile } from '../lib/profile.js';
+import { weeklyLeaderboard } from '../lib/leaderboard.js';
 import { parseTagInput } from '../lib/tags.js';
 import { istDateStr } from '../../../shared/streak.js';
 
@@ -134,7 +135,14 @@ router.get(
     if (!since) {
       return res.status(404).json({ error: 'Not found', code: 'not-found' });
     }
-    res.json({ profile: await buildFriendProfile(friend, { friendsSince: since }) });
+    const [profile, board] = await Promise.all([
+      buildFriendProfile(friend, { friendsSince: since }),
+      weeklyLeaderboard(req.user.sub)
+    ]);
+    // Their place on *your* leaderboard this week ("#1 of 7").
+    profile.thisWeek.rank = board.rows.find((r) => r.tag === friend.friendTag)?.rank ?? null;
+    profile.thisWeek.of = board.rows.length;
+    res.json({ profile });
   })
 );
 

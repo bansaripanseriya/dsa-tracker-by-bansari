@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.js';
 import progressRoutes from './routes/progress.js';
 import userRoutes from './routes/users.js';
 import friendRoutes from './routes/friends.js';
+import leaderboardRoutes from './routes/leaderboard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Load `.env` from repository root (parent of `server/`), not `server/.env`
@@ -46,6 +47,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/friends', friendRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 
 if (process.env.NODE_ENV === 'production') {
   const distCandidates = [

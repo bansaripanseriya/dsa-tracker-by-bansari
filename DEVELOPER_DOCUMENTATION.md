@@ -98,7 +98,7 @@ The server loads **`.env` from the repository root** (not inside `server/`), as 
 
 | Command (repo root) | What it does |
 |---|---|
-| `npm run seed` | `server/scripts/seed.js` — creates/resets 5 demo users (password `password123`) with sheet, practice and streak data and fixed friend tags: `aditi@` `#A4TZ6HW`, `priya@` `#7K3QX9P`, `rohan@` `#R8M2VQA`, `kabir@` `#K9P3NXE`, `kavya@example.com` `#W6DM3XF` (hidden from name search). Refuses to run against a non-local `MONGODB_URI` unless `--force`. |
+| `npm run seed` | `server/scripts/seed.js` — creates/resets 5 demo users (password `password123`) with sheet, practice and streak data and fixed friend tags: `aditi@` `#A4TZ6HW`, `priya@` `#7K3QX9P`, `rohan@` `#R8M2VQA`, `kabir@` `#K9P3NXE`, `kavya@example.com` `#W6DM3XF` (hidden from name search). Also creates friendships (aditi ↔ priya, rohan, kavya; priya ↔ rohan; kabir → aditi pending) and solve history with `live` solves in this and last leaderboard week, so the leaderboard matches the design (Priya 135 · Rohan 110 · Aditi 95 · Kavya 65). Only touches demo users. Refuses to run against a non-local `MONGODB_URI` unless `--force`. |
 | `npm test` | Runs `node --test` in `server/` (built-in Node test runner, no dependencies). Tests live in `server/test/*.test.js`. `*.db.test.js` files use a throwaway `dsa-tracker-test` database (or `MONGODB_URI_TEST`; the name must end in `-test`) and skip themselves if MongoDB isn't running. |
 
 ---
@@ -191,6 +191,7 @@ Declining, cancelling and unfriending **delete** the document (nobody is notifie
 | `app.use('/api/progress', progressRoutes)` | Progress endpoints (all protected). |
 | `app.use('/api/users', userRoutes)` | Tag lookup, people search, discoverability (§6.6, §6.7). |
 | `app.use('/api/friends', friendRoutes)` | Friend requests, friends list, friend profiles (§6.7). |
+| `app.use('/api/leaderboard', leaderboardRoutes)` | Weekly leaderboard (§6.8). |
 | `app.set('trust proxy', 1)` | Render and Vite's dev proxy sit in front of Express; trusting one hop lets the per-IP rate limits see the real client. |
 | Production static | Serves `client/dist` and `sendFile(index.html)` for client routes. |
 | `main()` | Async: `await connectDb()`, then `listen`. |
@@ -318,10 +319,26 @@ Never included anywhere: email, Mongo `_id`, notes, resume, raw progress keys, a
 | `POST` | `/requests` | Body `{ tag }` → `sendRequest`. **201** when a request was created, **200** otherwise. Returns `{ status: 'pending'|'accepted', relationship, user }`. |
 | `POST` | `/requests/:tag/accept` | Accept their request → `{ status: 'accepted', relationship: 'friends', user }`. |
 | `DELETE` | `/requests/:tag` | Decline or cancel → `{ status: 'removed', relationship: 'none' }`. |
-| `GET` | `/:tag/profile` | `{ profile }` for a friend. **404** `not-found` for non-friends *and* unknown tags alike, so strangers can't confirm someone exists. Weekly rank comes with the leaderboard (Phase 5). |
+| `GET` | `/:tag/profile` | `{ profile }` for a friend. **404** `not-found` for non-friends *and* unknown tags alike, so strangers can't confirm someone exists. `profile.thisWeek.rank` / `.of` = their place on **your** leaderboard this week ("#1 of 4"). |
 | `DELETE` | `/:tag` | Unfriend. |
 
 `/auth/me` also calls `ensureStats` (`lib/solves.js`), so accounts that haven't saved progress since stats were introduced still show correct solved counts to friends.
+
+### 6.8 Weekly leaderboard — `lib/leaderboard.js`, `routes/leaderboard.js`
+
+**Rules:** you plus your accepted friends; strangers never appear. A week runs **Monday 00:00 IST → next Monday 00:00 IST** (`weekRangeIST`). Points are Easy 5 / Medium 10 / Hard 15 per problem, counted from `solves` that are `source: 'live'`, `active: true` and first solved inside the week — so backfilled history, un-ticked problems and re-ticked old problems never score. Computed on request (one aggregation per week); no cron jobs or stored tables.
+
+| Function | Role |
+|----------|------|
+| `weekScores(userIds, { start, end })` | One aggregation → `Map(userId → { points, easy, medium, hard })`. |
+| `competitionRanker(points)` | Pure: ranks with ties shared and the next rank skipped (`1, 2, 2, 4`). |
+| `weeklyLeaderboard(me, { offset, now })` | Rows = `memberCard` + `points`, `easy`, `medium`, `hard`, `solved`, `rank`, `rankChange`, `isMe`; sorted by rank, then name. `rankChange` = places gained versus the week before (`+1` up, `-1` down, `0` same), or `null` if nobody scored that week. Returns `{ week: { start, end, offset, live }, rows, me }`. |
+
+| Method | Path | Behavior |
+|--------|------|----------|
+| `GET` | `/api/leaderboard/weekly?offset=0..8` | `authRequired`. `offset` = weeks back (0 = this week, `live: true`). Out of range → **400**. |
+
+The client works out the "nudge" line (e.g. "15 pts behind Rohan") from `rows`; dates in `week` are UTC instants — display them in IST.
 
 ---
 

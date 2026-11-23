@@ -13,9 +13,9 @@ Design canvas: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3
 | 2. Solve tracking | **Done** (2026-11-24) | See "Phase 2 — what shipped" below. |
 | 3. Identity | **Done** (2026-11-24) | See "Phase 3 — what shipped" below. |
 | 4. Friendships & search API | **Done** (2026-11-24) | See "Phase 4 — what shipped" below. |
-| 5. Leaderboard API | Not started | |
+| 5. Leaderboard API | **Done** (2026-11-24) | See "Phase 5 — what shipped" below. |
 | 6. Frontend | Not started | |
-| 7. Migration, seed, rollout | Not started | |
+| 7. Migration, seed, rollout | Partly done | Seed finished early (phases 3 and 5); migration script and rollout remain. |
 
 ---
 
@@ -218,6 +218,16 @@ Design canvas: https://claude.ai/artifact/GSB1dfp2H5jaSTvov6TDP3
 
 **Done when:** the seeded data produces the same shape of leaderboard as the canvas Friends tab.
 
+### Phase 5 — what shipped
+
+- `server/src/lib/leaderboard.js` — `weekScores` (one aggregation per week), `competitionRanker` (1, 2, 2, 4), `weeklyLeaderboard`; `server/src/routes/leaderboard.js` → `GET /api/leaderboard/weekly?offset=0..8`.
+- Rows are `memberCard`s plus `points`, `easy`, `medium`, `hard`, `solved`, `rank`, `rankChange`, `isMe`. **`rankChange` is `null` when nobody scored in the previous week** (otherwise everyone would look like they dropped from a 0–0 tie).
+- Users whose account no longer exists are left out of the ranking.
+- The friend profile now includes `thisWeek.rank` / `thisWeek.of` (their place on the viewer's leaderboard), finishing what Phase 4 left open.
+- **Pulled forward from Phase 7:** the seed creates demo friendships and `live` solves in this and last week with the mockup's numbers (Priya 135 · Rohan 110 · Aditi 95 · Kavya 65; last week Rohan 150 and a 105–105 tie).
+- Tests (67 total): `leaderboard.test.js` (ranking), `leaderboard.db.test.js` (the mockup standings including the tie and rank changes, strangers excluded, backfill / un-ticked / Sunday-23:59 / next-week solves excluded, no friends, no previous week).
+- Verified over HTTP: both weeks, offset validation (400), auth (401), profile rank, and the full loop — ticking a Hard through `PUT /api/progress` moved Aditi from 95 to 110, tied 2nd with Rohan.
+
 ---
 
 ## Phase 6 — Frontend
@@ -246,7 +256,7 @@ Map each screen to its canvas board.
 
 1. **`server/scripts/migrate-friends.js`** (`npm run migrate:friends`, idempotent). Per user:
    assign tag → build `nameSearch` → set `discoverability.byName: true` if missing → `expandSheetDone` → `backfillSolves(user, lcSetFromKeys(progress))` for users with `solvesSyncedAt: null` (already idempotent, from Phase 2) → compute `stats`.
-2. **Update `server/scripts/seed.js`:** ~~fixed tags for demo users; one extra demo user with name search switched off~~ (done in Phase 3); friendships aditi–priya and aditi–rohan (accepted), kabir → aditi (pending); **live** solves spread over this and last week so the leaderboard has data.
+2. ~~**Update `server/scripts/seed.js`**~~ — **done**: tags and a hidden-from-name-search user in Phase 3; friendships and `live` solves for this and last week in Phase 5.
 3. **Rollout on Render** (no new env vars):
    1. Deploy Phases 1–5 (backwards compatible; UI unchanged except unique counting).
    2. Run the migration once (Render shell: `npm run migrate:friends --prefix server`).

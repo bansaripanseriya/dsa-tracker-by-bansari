@@ -95,6 +95,8 @@ npm run dev                 # API on :4000, app on http://localhost:5173
 Demo accounts created by `npm run seed` (password `password123` for all):
 `aditi@example.com`, `priya@example.com`, `rohan@example.com`, `kabir@example.com`,
 `kavya@example.com` (hidden from name search). Each has a fixed friend tag, printed by the seed.
+Aditi is friends with Priya, Rohan and Kavya and has a pending request from Kabir, and everyone has
+solves in this and last week — log in as Aditi to see a populated leaderboard.
 The seed only runs against a local database unless you pass `--force`.
 
 ---
